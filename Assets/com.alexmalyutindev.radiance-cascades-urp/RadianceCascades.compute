@@ -14,16 +14,19 @@ float4 _RadianceCascades_TexelSize;
 float4 _CascadeRect;
 RWTexture2D<float4> _RadianceCascades;
 
+RWTexture2D<float4> _Cascades0;
+
 inline float SampleLinearDepth(float2 uv)
 {
     float rawDepth = SAMPLE_TEXTURE2D_LOD(_DepthTexture, sampler_LinearClamp, uv, 0).r;
     return LinearEyeDepth(rawDepth, _ZBufferParams);
 }
 
-static float StepSize = 1.5;
-static int StepsCount0 = 5;
-static int StepsCount1 = 5;
-static int StepsCount2 = 10;
+static float StepSize = 1.1;
+static int ProbeSize = 5;
+static int StepsCount0 = ProbeSize;
+static int StepsCount1 = ProbeSize * 2;
+static int StepsCount2 = ProbeSize * 4;
 
 float4 RayTrace(float2 probeUV, float2 direction, float sceneDepth, int stepsCount)
 {
@@ -46,7 +49,7 @@ float4 RayTrace(float2 probeUV, float2 direction, float sceneDepth, int stepsCou
         if (sceneDepth > currentDepth && sceneDepth - currentDepth < .2f)
         {
             float3 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_LinearClamp, uv, 0).rgb;
-            color *= dot(color, 1.0f) > 0.7f;
+            // color *= dot(color, 1.0f) > 0.7f;
             return float4(color.rgb, 1.0f);
         }
     }
@@ -107,12 +110,14 @@ void Main(uint3 id : SV_DispatchThreadID)
     float2 direction0;
     sincos((sectorId + 0.5f) * PI * 0.5f, direction0.y, direction0.x);
     direction0 = normalize(direction0);
-    _RadianceCascades[texCoord] = RayTrace(
+    float4 cascade0 = RayTrace(
         probeCenterUV,
         direction0,
         sceneDepth,
         StepsCount0
     );
+    // _RadianceCascades[texCoord] = cascade0;
+    _Cascades0[texCoord] = cascade0;
 
 
     // Cascade 1
@@ -124,9 +129,9 @@ void Main(uint3 id : SV_DispatchThreadID)
     sincos((sectorId + 0.5f) * PI * 0.125f, direction1.y, direction1.x);
     direction1 = normalize(direction1);
 
-    int2 texCoord1 = texCoord + int2(_CascadeRect.z, 0);
-    _RadianceCascades[texCoord1] = RayTrace(
-        probeCenterUV + direction1 / _CascadeRect.zw * StepSize * (StepsCount0 - 2),
+    // int2 texCoord1 = texCoord + int2(_CascadeRect.z, 0);
+    _RadianceCascades[texCoord] = RayTrace(
+        probeCenterUV + direction1 / _CascadeRect.zw * StepSize * (StepsCount0),
         direction1,
         sceneDepth,
         StepsCount1
@@ -141,16 +146,149 @@ void Main(uint3 id : SV_DispatchThreadID)
     sincos((sectorId + 0.5f) * PI * 0.125f * 0.25f, direction2.y, direction2.x);
     direction2 = normalize(direction2);
 
-    int2 texCoord2 = texCoord + int2(_CascadeRect.z * 2, 0);
+    int2 texCoord2 = texCoord + int2(_CascadeRect.z, 0);
     _RadianceCascades[texCoord2] = RayTrace(
-        probeCenterUV + direction2 / _CascadeRect.zw * StepSize * (StepsCount0 + StepsCount1 - 5),
+        probeCenterUV + direction2 / _CascadeRect.zw * StepSize * (StepsCount0 + StepsCount1),
+        direction2,
+        sceneDepth,
+        StepsCount2
+    );
+
+
+    // TODO: Cascade 3
+    probeCenterUV = (floor(texCoord * 0.125f) * 8.0f + 2.0f) / _CascadeRect.zw;
+    sceneDepth = SampleLinearDepth(probeCenterUV) - 0.05f;
+
+    float2 direction3;
+    sectorId = texCoord.x % 8 + (texCoord.y % 8) * 8;
+    sincos((sectorId + 0.5f) * PI * 0.125f * 0.25f * 0.25f, direction3.y, direction3.x);
+    direction2 = normalize(direction2);
+
+    int2 texCoord3 = texCoord + int2(_CascadeRect.z * 2, 0);
+    _RadianceCascades[texCoord3] = RayTrace(
+        probeCenterUV + direction3 / _CascadeRect.zw * StepSize * (StepsCount0 + StepsCount1 + StepsCount2),
         direction2,
         sceneDepth,
         StepsCount2
     );
 }
 
+
+/////////////
+/// MERGE ///
+/////////////
+
+half4 SampleProbe1(uint2 coord, int dim)
+{
+    int2 probId = floor(coord / dim) * dim;
+    half4 color = 0.0h;
+    UNITY_UNROLL
+    for (int i = 0; i < 4; i++)
+    {
+        int2 offset = int2(i % 2, i / 2);
+        half4 sample = LOAD_TEXTURE2D(_RadianceCascades, probId + offset);
+
+        if (sample.a < 0.5f)
+        {
+            int2 coordNext = coord;
+            coordNext.x += _CascadeRect.z;
+            sample += SampleProbe1(coordNext, dim * 2);
+        }
+
+        color += sample * 0.25f;
+    }
+
+    return color;
+}
+
+half4 SampleProbe0(uint2 coord, int dim)
+{
+    int2 probId = floor(coord / dim) * dim;
+    half4 color = 0.0h;
+    UNITY_UNROLL
+    for (int i = 0; i < 4; i++)
+    {
+        int2 offset = int2(i % 2, i / 2);
+        half4 sample = LOAD_TEXTURE2D(_Cascades0, probId + offset);
+
+        if (sample.a < 0.5f)
+        {
+            sample += SampleProbe1(coord, dim * 2);
+        }
+        color += sample * 0.25f;
+    }
+
+    return color;
+}
+
+half4 SampleProbe(uint2 coord)
+{
+    int2 probId0 = floor(coord / 2) * 2;
+    half4 color = 0.0h;
+
+    UNITY_UNROLL
+    for (int i = 0; i < 4; i++)
+    {
+        int2 offset0 = int2(i % 2, i / 2);
+        half4 s0 = LOAD_TEXTURE2D(_Cascades0, probId0 + offset0);
+
+        if (s0.a < 0.5h)
+        {
+            s0 = 0;
+            // Continue sampler along ray!
+            int2 probId1 = floor(coord / 4) * 4;
+            for (int i1 = 0; i1 < 4; i1++)
+            {
+                int ray1 = i * 4 + i1;
+                int2 offset1 = int2(ray1 % 4, ray1 / 4);
+                half4 s1 = LOAD_TEXTURE2D(_RadianceCascades, probId1 + offset1);
+
+                if (s1.a < 0.5h)
+                {
+                    s1 = 0;
+                    int2 probId2 = floor(coord / 8) * 8;
+                    probId2.x += _CascadeRect.z;
+                    for (int i2 = 0; i2 < 4; i2++)
+                    {
+                        int ray2 = ray1 * 4 + i2;
+                        int2 offset2 = int2(ray2 % 8, ray2 / 8);
+                        half4 s2 = LOAD_TEXTURE2D(_RadianceCascades, probId2 + offset2);
+
+                        if (s2.a < 0.5f)
+                        {
+                            s2 = 0;
+                            int2 probId3 = floor(coord / 16) * 16;
+                            probId2.x += _CascadeRect.z * 2;
+                            for (int i3 = 0; i3 < 4; i3++)
+                            {
+                                int ray3 = ray2 * 4 + i3;
+                                int2 offset3 = int2(ray3 % 16, ray3 / 16);
+                                half4 s3 = LOAD_TEXTURE2D(_RadianceCascades, probId3 + offset3);
+                                s2 += s3 * 0.25f;
+                            }
+                        }
+                        
+                        s1 += s2 * 0.25f;
+                    }
+                }
+
+                s0 += s1 * 0.25f;
+            }
+        }
+        color += s0 * 0.25f;
+    }
+    return color;
+}
+
 [numthreads(8,8,1)]
 void Merge(uint3 id : SV_DispatchThreadID)
 {
+    uint2 texCoord = id.xy;
+    if (any(texCoord > uint2(_CascadeRect.zw)))
+    {
+        return;
+    }
+
+    // _Cascades0[texCoord] = SampleProbe0(texCoord, 2);
+    _Cascades0[texCoord] = SampleProbe(texCoord);
 }

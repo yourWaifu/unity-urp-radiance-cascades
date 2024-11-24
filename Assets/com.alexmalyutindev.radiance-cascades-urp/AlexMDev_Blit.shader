@@ -123,28 +123,66 @@ Shader "AlexMDev/Blit"
                 return color;
             }
 
+            half4 SampleProbe0(uint2 coord)
+            {
+                int2 probId0 = floor(coord / 2) * 2;
+                half4 color = 0.0h;
+
+                UNITY_UNROLL
+                for (int i = 0; i < 4; i++)
+                {
+                    int2 offset0 = int2(i % 2, i / 2);
+                    half4 s0 = LOAD_TEXTURE2D(_MainTex, probId0 + offset0);
+                    color += s0 * 0.25f;
+                }
+                return color;
+            }
+
+            half4 SampleProbe0_Bileaner(uint2 coord)
+            {
+                int2 probId0 = floor(coord / 2) * 2;
+                float2 probUV = (probId0 + 1) * _MainTex_TexelSize.xy;
+                return SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, probUV);
+            }
+
             half4 Fragment(Varyings input) : SV_TARGET
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-                input.texcoord.x /= 3.0f;
                 int2 coord = floor(input.texcoord * _MainTex_TexelSize.zw - 1);
 
-                float2 uv2 = coord * _MainTex_TexelSize.xy;
-                half4 radiance = SampleProbe(coord);
-                return radiance;
-                
-                radiance += SampleProbe(coord) * length((input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                // TODO: Bilinear blend 
+                float2 offset = input.texcoord * _MainTex_TexelSize.zw - floor(coord * 0.5f) * 2;
+                // return half4(offset - 2, 0, 1);
 
-                uv2 = (coord + int2(2, 2)) * _MainTex_TexelSize.xy;
-                radiance += SampleProbe(coord + int2(2, 2)) * length((input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                // TODO: blend 4 probes
+                half4 radience = SampleProbe0_Bileaner(coord);
+                // return radience;
+                radience += SampleProbe0_Bileaner(coord + int2(2, 0));
+                radience += SampleProbe0_Bileaner(coord + int2(0, 2));
+                radience += SampleProbe0_Bileaner(coord + int2(2, 2));
 
-                uv2 = (coord + int2(2, 0)) * _MainTex_TexelSize.xy;
-                radiance += SampleProbe(coord + int2(2, 0)) * length((input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                return radience * 0.25;
 
-                uv2 = (coord + int2(0, 2)) * _MainTex_TexelSize.xy;
-                radiance += SampleProbe(coord + int2(2, 0)) * length((input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
-
-                return radiance;
+                // Old
+                // float2 uv2 = coord * _MainTex_TexelSize.xy;
+                // half4 radiance = SampleProbe(coord);
+                // return radiance;
+                //
+                // radiance += SampleProbe(coord) * length((input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                //
+                // uv2 = (coord + int2(2, 2)) * _MainTex_TexelSize.xy;
+                // radiance += SampleProbe(coord + int2(2, 2)) * length(
+                //     (input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                //
+                // uv2 = (coord + int2(2, 0)) * _MainTex_TexelSize.xy;
+                // radiance += SampleProbe(coord + int2(2, 0)) * length(
+                //     (input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                //
+                // uv2 = (coord + int2(0, 2)) * _MainTex_TexelSize.xy;
+                // radiance += SampleProbe(coord + int2(2, 0)) * length(
+                //     (input.texcoord - uv2) * _MainTex_TexelSize.zw * 0.5f);
+                //
+                // return radiance;
             }
             ENDHLSL
         }
@@ -366,10 +404,10 @@ Shader "AlexMDev/Blit"
                 float4 offset = float4(_MainTex_TexelSize.xy, -_MainTex_TexelSize.xy) * 2;
                 half4 color = 0;
                 color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.xy);
-                color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.zy);
-                color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.xw);
-                color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.zw);
-                color *= 0.26f;
+                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.zy);
+                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.xw);
+                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.zw);
+                // color *= 0.26f;
 
                 half4 gbuffer0 = SAMPLE_TEXTURE2D(_GBuffer0, sampler_PointClamp, input.texcoord);
 

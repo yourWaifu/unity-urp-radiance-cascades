@@ -22,6 +22,12 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
         {
             return;
         }
+
+        if (renderingData.cameraData.isPreviewCamera)
+        {
+            return;
+        }
+        
         renderer.EnqueuePass(_pass);
     }
 }
