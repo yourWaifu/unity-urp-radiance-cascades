@@ -351,6 +351,7 @@ Shader "AlexMDev/Blit"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareNormalsTexture.hlsl"
 
             TEXTURE2D(_GBuffer0);
             TEXTURE2D(_MainTex);
@@ -397,6 +398,8 @@ Shader "AlexMDev/Blit"
                 return output;
             }
 
+            float3 _CameraForward;
+
             half4 Fragment(Varyings input) : SV_TARGET
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -409,9 +412,14 @@ Shader "AlexMDev/Blit"
                 // color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, input.texcoord + offset.zw);
                 // color *= 0.26f;
 
+                
                 half4 gbuffer0 = SAMPLE_TEXTURE2D(_GBuffer0, sampler_PointClamp, input.texcoord);
-
                 return color * gbuffer0;
+                
+                half3 normalWS = SampleSceneNormals(input.texcoord);
+                half bling = 1.0h - abs(dot(normalWS, -_CameraForward));
+
+                return color * gbuffer0 * bling;
             }
             ENDHLSL
         }

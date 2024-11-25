@@ -8,8 +8,21 @@ public class RadianceCascadesPass : ScriptableRenderPass
 {
     private readonly ProfilingSampler _profilingSampler;
 
-    private RTHandle _RadianceCascades;
     private RTHandle _Cascades0;
+
+    private RTHandle[] _Cascades = new RTHandle[6];
+    private static readonly string[] _cascadeNames = GenNames(6);
+
+    private static string[] GenNames(int n)
+    {
+        var names = new string[n];
+        for (int i = 0; i < n; i++)
+        {
+            names[i] = "_Cascade" + i;
+        }
+
+        return names;
+    }
 
     private RTHandle _BlurBuffer0;
     private RTHandle _BlurBuffer1;
@@ -34,31 +47,29 @@ public class RadianceCascadesPass : ScriptableRenderPass
     {
         var aspect = cameraTextureDescriptor.height / (float) cameraTextureDescriptor.width;
 
-        var probesCount = 128;
+        var probesCountX = cameraTextureDescriptor.width / 4;
+        var probesCountY = cameraTextureDescriptor.height / 4;
 
         // 16 probes for 1st cascade (4 rays => 2x2)
-        var desc = new RenderTextureDescriptor(probesCount * 2 * 3, (int) (probesCount * 2 * aspect))
+        var desc = new RenderTextureDescriptor(
+            128 * 2 * 2,
+            128 * 2
+        )
         {
-            colorFormat = RenderTextureFormat.ARGBFloat,
+            colorFormat = RenderTextureFormat.ARGBHalf,
             enableRandomWrite = true,
         };
-        RenderingUtils.ReAllocateIfNeeded(
-            ref _RadianceCascades,
-            desc,
-            name: nameof(_RadianceCascades),
-            filterMode: FilterMode.Point
-        );
 
-        // One cascade target!
-        desc.width = probesCount * 2;
-        desc.height = (int) (probesCount * 2 * aspect);
-        RenderingUtils.ReAllocateIfNeeded(
-            ref _Cascades0,
-            desc,
-            filterMode: FilterMode.Point,
-            wrapMode: TextureWrapMode.Clamp,
-            name: nameof(_Cascades0)
-        );
+        for (int i = 0; i < _Cascades.Length; i++)
+        {
+            RenderingUtils.ReAllocateIfNeeded(
+                ref _Cascades[i],
+                desc,
+                filterMode: FilterMode.Point,
+                wrapMode: TextureWrapMode.Clamp,
+                name: _cascadeNames[i]
+            );
+        }
 
         var desc1 = new RenderTextureDescriptor(cameraTextureDescriptor.width / 2, cameraTextureDescriptor.height / 2)
         {
@@ -95,11 +106,11 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
             cmd.BeginSample("Cascades");
 
-            cmd.SetRenderTarget(_RadianceCascades);
+            cmd.SetRenderTarget(_Cascades[0]);
             cmd.ClearRenderTarget(RTClearFlags.Color, Color.black, 0, 0);
 
             // Shared
-            var radianceCascadesRT = _RadianceCascades.rt;
+            var radianceCascadesRT = _Cascades[0].rt;
             cmd.SetComputeVectorParam(
                 _radianceCascadesCs,
                 "_RadianceCascades_TexelSize",
@@ -113,13 +124,16 @@ public class RadianceCascadesPass : ScriptableRenderPass
             cmd.SetComputeVectorParam(
                 _radianceCascadesCs,
                 "_CascadeRect",
-                new Vector4(0.0f, 0.0f, radianceCascadesRT.width / 3.0f, radianceCascadesRT.height)
+                new Vector4(0.0f, 0.0f, radianceCascadesRT.width, radianceCascadesRT.height)
             );
 
 
             // Input
-            cmd.SetComputeTextureParam(_radianceCascadesCs, _mainKernel, nameof(_RadianceCascades), _RadianceCascades);
-            cmd.SetComputeTextureParam(_radianceCascadesCs, _mainKernel, nameof(_Cascades0), _Cascades0);
+            for (int i = 0; i < _Cascades.Length; i++)
+            {
+                cmd.SetComputeTextureParam(_radianceCascadesCs, _mainKernel, _cascadeNames[i], _Cascades[i]);
+                cmd.SetComputeTextureParam(_radianceCascadesCs, _mergeKernel, _cascadeNames[i], _Cascades[i]);
+            }
 
 
             cmd.SetComputeVectorParam(_radianceCascadesCs, "_ColorTexture_TexelSize", colorTextureTexelSize);
@@ -146,53 +160,73 @@ public class RadianceCascadesPass : ScriptableRenderPass
             cmd.DispatchCompute(
                 _radianceCascadesCs,
                 _mainKernel,
-                radianceCascadesRT.width / 8 / 3,
+                radianceCascadesRT.width / 8,
                 radianceCascadesRT.height / 8,
                 1
             );
 
 
             // Merge
-            cmd.SetComputeTextureParam(
-                _radianceCascadesCs,
-                _mergeKernel,
-                nameof(_RadianceCascades),
-                _RadianceCascades
-            );
-            cmd.SetComputeTextureParam(
-                _radianceCascadesCs,
-                _mergeKernel,
-                nameof(_Cascades0),
-                _Cascades0
-            );
             cmd.DispatchCompute(
                 _radianceCascadesCs,
                 _mergeKernel,
-                radianceCascadesRT.width / 8 / 3,
+                radianceCascadesRT.width / 8,
                 radianceCascadesRT.height / 8,
                 1
             );
 
             cmd.EndSample("Cascades");
 
-            
-            
+
             cmd.BeginSample("Blit");
 
-            cmd.Blit(_Cascades0, _BlurBuffer0, _blit, 0);
+            cmd.Blit(_Cascades[0], _BlurBuffer0, _blit, 0);
             // cmd.Blit(_BlurBuffer0, _BlurBuffer1, _blit, 1);
             // cmd.Blit(_BlurBuffer1, _BlurBuffer0, _blit, 2);
             // cmd.Blit(_BlurBuffer0, _BlurBuffer1, _blit, 2);
             // cmd.Blit(_BlurBuffer1, colorTexture, _blit, 3);
             // cmd.Blit(_BlurBuffer0, colorTexture, _blit, 3);
+            cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
             cmd.Blit(_BlurBuffer0, colorTexture, _blit, 3);
 
             const float scale = 0.2f;
             Blitter.BlitQuad(
                 cmd,
-                _RadianceCascades,
+                _Cascades[0],
                 new Vector4(1, 1f, 0, 0),
-                new Vector4(3 * scale, scale, 0, 1.0f - scale),
+                new Vector4(scale, scale, 0, 1.0f - scale),
+                0,
+                false
+            );
+            Blitter.BlitQuad(
+                cmd,
+                _Cascades[1],
+                new Vector4(1, 1f, 0, 0),
+                new Vector4(scale, scale, 0, 1.0f - scale * 2),
+                0,
+                false
+            );
+            Blitter.BlitQuad(
+                cmd,
+                _Cascades[2],
+                new Vector4(1, 1f, 0, 0),
+                new Vector4(scale, scale, 0, 1.0f - scale * 3),
+                0,
+                false
+            );
+            Blitter.BlitQuad(
+                cmd,
+                _Cascades[3],
+                new Vector4(1, 1f, 0, 0),
+                new Vector4(scale, scale, 0, 1.0f - scale * 4),
+                0,
+                false
+            );
+            Blitter.BlitQuad(
+                cmd,
+                _Cascades[4],
+                new Vector4(1, 1f, 0, 0),
+                new Vector4(scale, scale, 0, 1.0f - scale * 5),
                 0,
                 false
             );
