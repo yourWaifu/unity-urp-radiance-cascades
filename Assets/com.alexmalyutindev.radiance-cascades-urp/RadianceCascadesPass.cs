@@ -33,8 +33,6 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private readonly ComputeShader _radianceCascadesCs;
     private readonly RadianceCascadeCompute _compute;
     private readonly int _mainKernel;
-    private readonly int _mergeKernel;
-    private readonly int _renderKernel;
 
 
     public RadianceCascadesPass(ComputeShader radianceCascadesCs, Material blit)
@@ -45,22 +43,20 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
         _blit = blit;
         _mainKernel = _radianceCascadesCs.FindKernel("Main");
-        _mergeKernel = _radianceCascadesCs.FindKernel("Merge");
-        _renderKernel = _radianceCascadesCs.FindKernel("RenderCascade");
         ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
     }
 
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
     {
-        var aspect = cameraTextureDescriptor.height / (float) cameraTextureDescriptor.width;
-
-        var probesCountX = cameraTextureDescriptor.width / 4;
-        var probesCountY = cameraTextureDescriptor.height / 4;
+        // var aspect = cameraTextureDescriptor.height / (float) cameraTextureDescriptor.width;
+        // var probesCountX = cameraTextureDescriptor.width / 4;
+        // var probesCountY = cameraTextureDescriptor.height / 4;
 
         // 16 probes for 1st cascade (4 rays => 2x2)
+        var probesCount = 128;
         var desc = new RenderTextureDescriptor(
-            128 * 2 * 2,
-            128 * 2
+            probesCount * 2 * 2,
+            probesCount * 2
         )
         {
             colorFormat = RenderTextureFormat.ARGBHalf,
@@ -111,161 +107,91 @@ public class RadianceCascadesPass : ScriptableRenderPass
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
-            cmd.BeginSample("Cascades");
-
-            cmd.SetRenderTarget(_Cascades[0]);
-            cmd.ClearRenderTarget(RTClearFlags.Color, Color.black, 0, 0);
-
-            // Shared
-            var radianceCascadesRT = _Cascades[0].rt;
-            cmd.SetComputeVectorParam(
-                _radianceCascadesCs,
-                "_RadianceCascades_TexelSize",
-                new Vector4(
-                    radianceCascadesRT.width,
-                    radianceCascadesRT.height,
-                    1.0f / radianceCascadesRT.width,
-                    1.0f / radianceCascadesRT.height
-                )
-            );
-            cmd.SetComputeVectorParam(
-                _radianceCascadesCs,
-                "_CascadeRect",
-                new Vector4(0.0f, 0.0f, radianceCascadesRT.width, radianceCascadesRT.height)
-            );
-
-
-            // Input
-            for (int i = 0; i < _Cascades.Length; i++)
+            var sampleKey = "RenderCascades";
+            cmd.BeginSample(sampleKey);
             {
-                cmd.SetComputeTextureParam(_radianceCascadesCs, _mainKernel, _cascadeNames[i], _Cascades[i]);
-                cmd.SetComputeTextureParam(_radianceCascadesCs, _mergeKernel, _cascadeNames[i], _Cascades[i]);
-            }
-
-
-            cmd.SetComputeVectorParam(_radianceCascadesCs, "_ColorTexture_TexelSize", colorTextureTexelSize);
-            cmd.SetComputeTextureParam(
-                _radianceCascadesCs,
-                _mainKernel,
-                "_ColorTexture",
-                colorTexture // gBuffer0 //
-            );
-            cmd.SetComputeTextureParam(
-                _radianceCascadesCs,
-                _mainKernel,
-                "_NormalsTexture",
-                renderingData.cameraData.renderer.GetGBuffer(2) // Normals
-            );
-            cmd.SetComputeTextureParam(
-                _radianceCascadesCs,
-                _mainKernel,
-                "_DepthTexture",
-                renderingData.cameraData.renderer.cameraDepthTargetHandle
-            );
-
-
-            // cmd.DispatchCompute(
-            //     _radianceCascadesCs,
-            //     _mainKernel,
-            //     radianceCascadesRT.width / 8,
-            //     radianceCascadesRT.height / 8,
-            //     1
-            // );
-
-
-            for (int i = 0; i < _Cascades.Length; i++)
-            {
-                _compute.RenderCascade(
-                    cmd,
-                    colorTexture,
-                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
-                    2 << (i + 1),
-                    _Cascades[i]
+                // Shared
+                // TODO: Move into arguments of RenderCascade(...)
+                cmd.SetComputeTextureParam(
+                    _radianceCascadesCs,
+                    _mainKernel,
+                    "_ColorTexture",
+                    colorTexture // gBuffer0 //
                 );
+                cmd.SetComputeTextureParam(
+                    _radianceCascadesCs,
+                    _mainKernel,
+                    "_NormalsTexture",
+                    renderingData.cameraData.renderer.GetGBuffer(2) // Normals
+                );
+                cmd.SetComputeTextureParam(
+                    _radianceCascadesCs,
+                    _mainKernel,
+                    "_DepthTexture",
+                    renderingData.cameraData.renderer.cameraDepthTargetHandle
+                );
+
+
+                for (int level = 0; level < _Cascades.Length; level++)
+                {
+                    _compute.RenderCascade(
+                        cmd,
+                        colorTexture,
+                        renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                        2 << (level + 1),
+                        level,
+                        _Cascades[level]
+                    );
+                }
             }
+            cmd.EndSample(sampleKey);
 
+            PreviewCascades(cmd);
 
+            sampleKey = "MergeCascades";
+            cmd.BeginSample(sampleKey);
+            {
+                for (int level = _Cascades.Length - 1; level > 0; level--)
+                {
+                    _compute.MergeCascades(cmd, _Cascades[level - 1], _Cascades[level], level - 1);
+                }
+            }
+            cmd.EndSample(sampleKey);
 
-            // Merge
-            cmd.DispatchCompute(
-                _radianceCascadesCs,
-                _mergeKernel,
-                radianceCascadesRT.width / 8,
-                radianceCascadesRT.height / 8,
-                1
-            );
+            PreviewCascades(cmd, 1.0f);
 
-            cmd.EndSample("Cascades");
-
-
-            cmd.BeginSample("Blit");
-
-            cmd.Blit(_Cascades[0], _BlurBuffer0, _blit, 0);
-            // cmd.Blit(_BlurBuffer0, _BlurBuffer1, _blit, 1);
-            // cmd.Blit(_BlurBuffer1, _BlurBuffer0, _blit, 2);
-            // cmd.Blit(_BlurBuffer0, _BlurBuffer1, _blit, 2);
-            // cmd.Blit(_BlurBuffer1, colorTexture, _blit, 3);
-            // cmd.Blit(_BlurBuffer0, colorTexture, _blit, 3);
-            cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
-            cmd.Blit(_BlurBuffer0, colorTexture, _blit, 3);
-
-            const float scale = 0.2f;
-            Blitter.BlitQuad(
-                cmd,
-                _Cascades[0],
-                new Vector4(1, 1f, 0, 0),
-                new Vector4(scale, scale, 0, 1.0f - scale),
-                0,
-                false
-            );
-            Blitter.BlitQuad(
-                cmd,
-                _Cascades[1],
-                new Vector4(1, 1f, 0, 0),
-                new Vector4(scale, scale, 0, 1.0f - scale * 2),
-                0,
-                false
-            );
-            Blitter.BlitQuad(
-                cmd,
-                _Cascades[2],
-                new Vector4(1, 1f, 0, 0),
-                new Vector4(scale, scale, 0, 1.0f - scale * 3),
-                0,
-                false
-            );
-            Blitter.BlitQuad(
-                cmd,
-                _Cascades[3],
-                new Vector4(1, 1f, 0, 0),
-                new Vector4(scale, scale, 0, 1.0f - scale * 4),
-                0,
-                false
-            );
-            Blitter.BlitQuad(
-                cmd,
-                _Cascades[4],
-                new Vector4(1, 1f, 0, 0),
-                new Vector4(scale, scale, 0, 1.0f - scale * 5),
-                0,
-                false
-            );
-
-            // Blitter.BlitQuad(
-            //     cmd,
-            //     _RadianceCascades,
-            //     new Vector4(1, 1f, 0, 0),
-            //     new Vector4(2, 1, 0, 0),
-            //     0,
-            //     true
-            // );
-
-            cmd.EndSample("Blit");
+            sampleKey = "Combine";
+            cmd.BeginSample(sampleKey);
+            {
+                // cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
+                cmd.Blit(_Cascades[0], colorTexture, _blit, 0);
+            }
+            cmd.EndSample(sampleKey);
         }
 
         context.ExecuteCommandBuffer(cmd);
         cmd.Clear();
 
         CommandBufferPool.Release(cmd);
+    }
+
+    private void PreviewCascades(CommandBuffer cmd, float offset = 0.0f)
+    {
+        cmd.BeginSample("Preview");
+
+        const float scale = 0.15f;
+        for (int i = 0; i < _Cascades.Length; i++)
+        {
+            Blitter.BlitQuad(
+                cmd,
+                _Cascades[i],
+                new Vector4(1, 1f, 0, 0),
+                new Vector4(scale, scale, scale * offset, 1.0f - scale * (i + 1)),
+                0,
+                false
+            );
+        }
+
+        cmd.EndSample("Preview");
     }
 }
