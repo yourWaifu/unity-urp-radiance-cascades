@@ -1,19 +1,18 @@
 #pragma kernel Main
 #pragma kernel Merge
+#pragma kernel RenderCascade
+#pragma kernel MergeCascades
+
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+#include "Common.hlsl"
 
 static float StepSize = 1;
 static int ProbeSize = 10;
 static int StepsCount0 = ProbeSize;
 static int StepsCount1 = ProbeSize * 2;
 static int StepsCount2 = ProbeSize * 4;
-
-float4 _ColorTexture_TexelSize;
-Texture2D _ColorTexture;
-Texture2D<float> _DepthTexture;
-Texture2D<half3> _NormalsTexture;
 
 float4 _RadianceCascades_TexelSize;
 float4 _CascadeRect;
@@ -26,40 +25,44 @@ RWTexture2D<float4> _Cascade3;
 RWTexture2D<float4> _Cascade4;
 RWTexture2D<float4> _Cascade5;
 
-inline float SampleLinearDepth(float2 uv)
-{
-    float rawDepth = SAMPLE_TEXTURE2D_LOD(_DepthTexture, sampler_LinearClamp, uv, 0).r;
-    return LinearEyeDepth(rawDepth, _ZBufferParams);
-}
 
-float4 RayTrace(float2 probeUV, float2 direction, float sceneDepth, int stepsCount)
+float _ProbeSize;
+float4 _OutCascadeSize;
+RWTexture2D<float4> _OutCascade;
+
+[numthreads(8,8,1)]
+void RenderCascade(uint3 id : SV_DispatchThreadID)
 {
-    direction *= _ColorTexture_TexelSize.zw * StepSize;
-    for (int i = 1; i < stepsCount; i++)
+    uint2 texCoord = id.xy;
+    if (any(texCoord > uint2(_OutCascadeSize.xy)))
     {
-        float2 offset = i * direction;
-
-        float2 uv = probeUV + offset;
-        if (any(uv < 0) || any(uv > 1))
-        {
-            return half4(0.0f, 0.0f, 0.0f, 0.0f);
-        }
-
-        float currentDepth = SampleLinearDepth(uv);
-        // Intersection
-        // (0)----------------| scene depth
-        // (1)----------|     | current depth
-        //              |     |
-        if (sceneDepth > currentDepth && sceneDepth - currentDepth < .2f)
-        {
-            float3 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_LinearClamp, uv, 0).rgb;
-            // color *= dot(color, 1.0f) > 0.7f;
-            return float4(color.rgb, 1.0f);
-        }
+        return;
     }
 
-    return half4(0.0f, 0.0f, 0.0f, 0.0f);
+    float2 probeCenterUV = (floor(texCoord / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) * _OutCascadeSize.zw;
+    float2 ray = GetRayDirection(texCoord, _ProbeSize);
+    ray *= _ColorTexture_TexelSize.zw * StepSize;
+    probeCenterUV += ray * (_ProbeSize - 2);
+
+    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.05f;
+    _OutCascade[texCoord] = RayTrace(probeCenterUV, ray, sceneDepth, _ProbeSize);
 }
+
+[numthreads(8,8,1)]
+void MergeCascades(uint3 id : SV_DispatchThreadID)
+{
+    uint2 texCoord = id.xy;
+    if (any(texCoord > uint2(_OutCascadeSize.xy)))
+    {
+        return;
+    }
+
+    // TODO:
+}
+
+
+
+
 
 // TODO: clip space tracing?
 float4 RayTrace3d(float3 probeUV, float3 direction, float sceneDepth, int stepsCount)
@@ -321,7 +324,7 @@ half4 SampleProbe(uint2 coord)
                                         s3 += s4;
                                     }
                                 }
-                                
+
                                 s2 += s3 * 0.25f;
                             }
                         }

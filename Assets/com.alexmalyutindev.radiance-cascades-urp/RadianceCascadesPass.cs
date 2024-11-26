@@ -1,3 +1,4 @@
+using AlexMalyutinDev.RadianceCascades;
 using InternalBridge;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
@@ -27,19 +28,25 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private RTHandle _BlurBuffer0;
     private RTHandle _BlurBuffer1;
 
-    private ComputeShader _radianceCascadesCs;
     private readonly Material _blit;
+
+    private readonly ComputeShader _radianceCascadesCs;
+    private readonly RadianceCascadeCompute _compute;
     private readonly int _mainKernel;
     private readonly int _mergeKernel;
+    private readonly int _renderKernel;
 
 
     public RadianceCascadesPass(ComputeShader radianceCascadesCs, Material blit)
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
         _radianceCascadesCs = radianceCascadesCs;
+        _compute = new RadianceCascadeCompute(_radianceCascadesCs);
+
         _blit = blit;
         _mainKernel = _radianceCascadesCs.FindKernel("Main");
         _mergeKernel = _radianceCascadesCs.FindKernel("Merge");
+        _renderKernel = _radianceCascadesCs.FindKernel("RenderCascade");
         ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
     }
 
@@ -157,13 +164,26 @@ public class RadianceCascadesPass : ScriptableRenderPass
             );
 
 
-            cmd.DispatchCompute(
-                _radianceCascadesCs,
-                _mainKernel,
-                radianceCascadesRT.width / 8,
-                radianceCascadesRT.height / 8,
-                1
-            );
+            // cmd.DispatchCompute(
+            //     _radianceCascadesCs,
+            //     _mainKernel,
+            //     radianceCascadesRT.width / 8,
+            //     radianceCascadesRT.height / 8,
+            //     1
+            // );
+
+
+            for (int i = 0; i < _Cascades.Length; i++)
+            {
+                _compute.RenderCascade(
+                    cmd,
+                    colorTexture,
+                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                    2 << (i + 1),
+                    _Cascades[i]
+                );
+            }
+
 
 
             // Merge
