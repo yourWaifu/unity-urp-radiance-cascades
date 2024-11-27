@@ -7,23 +7,13 @@ using UnityEngine.Rendering.Universal;
 
 public class RadianceCascadesPass : ScriptableRenderPass
 {
+    private const int CascadesCount = 5;
     private readonly ProfilingSampler _profilingSampler;
 
     private RTHandle _Cascades0;
 
-    private RTHandle[] _Cascades = new RTHandle[6];
-    private static readonly string[] _cascadeNames = GenNames(6);
-
-    private static string[] GenNames(int n)
-    {
-        var names = new string[n];
-        for (int i = 0; i < n; i++)
-        {
-            names[i] = "_Cascade" + i;
-        }
-
-        return names;
-    }
+    private RTHandle[] _Cascades = new RTHandle[CascadesCount];
+    private static readonly string[] _cascadeNames = GenCascadeNames(CascadesCount);
 
     private RTHandle _BlurBuffer0;
     private RTHandle _BlurBuffer1;
@@ -34,6 +24,20 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private readonly RadianceCascadeCompute _compute;
     private readonly int _mainKernel;
 
+
+    // High:
+    // Using aspect 7/4(14/8) to be closer to 16/9.
+    // 128 => [224, 112, 56, 28, 14, 7] - horizontal probes
+    //        [128,  64, 32, 16,  8, 4] - vertical probes 
+    // Medium:
+    // ...
+    private static Vector2Int[] Resolutions = {
+        new(32 * 16, 32 * 9), // 256x144 probes0
+        new(32 * 10, 32 * 6), // 160x96 probes0
+        new(32 * 7, 32 * 4), // 112x64 probes0
+        new(32 * 4, 32 * 3), // 64x48 probes0
+        new(32 * 3, 32 * 2), // 48x32 probes0
+    };
 
     public RadianceCascadesPass(ComputeShader radianceCascadesCs, Material blit)
     {
@@ -52,11 +56,9 @@ public class RadianceCascadesPass : ScriptableRenderPass
         // var probesCountX = cameraTextureDescriptor.width / 4;
         // var probesCountY = cameraTextureDescriptor.height / 4;
 
-        // 16 probes for 1st cascade (4 rays => 2x2)
-        var probesCount = 128;
         var desc = new RenderTextureDescriptor(
-            probesCount * 2 * 2,
-            probesCount * 2
+            Resolutions[1].x,
+            Resolutions[1].y
         )
         {
             colorFormat = RenderTextureFormat.ARGBHalf,
@@ -172,7 +174,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
     {
         cmd.BeginSample("Preview");
 
-        const float scale = 0.15f;
+        const float scale = 1f / 8f;
         for (int i = 0; i < _Cascades.Length; i++)
         {
             Blitter.BlitQuad(
@@ -186,5 +188,17 @@ public class RadianceCascadesPass : ScriptableRenderPass
         }
 
         cmd.EndSample("Preview");
+    }
+
+
+    private static string[] GenCascadeNames(int n)
+    {
+        var names = new string[n];
+        for (int i = 0; i < n; i++)
+        {
+            names[i] = "_Cascade" + i;
+        }
+
+        return names;
     }
 }

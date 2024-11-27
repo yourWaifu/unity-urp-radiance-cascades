@@ -18,7 +18,7 @@ Shader "AlexMDev/Blit"
             ZTest Off
             ZWrite Off
             Blend One One
-//            Blend One Zero
+            //            Blend One Zero
 
             HLSLPROGRAM
             #pragma vertex Vertex
@@ -80,25 +80,28 @@ Shader "AlexMDev/Blit"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                half4 color = 0;
+                half depth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_PointClamp, input.texcoord).x;
+                if (depth == UNITY_RAW_FAR_CLIP_VALUE)
+                {
+                    clip(-1);
+                }
 
                 int2 coord = floor(input.texcoord * _MainTex_TexelSize.zw * 0.5f) * 2.0f;
-                // color += LOAD_TEXTURE2D(_MainTex, coord);
-                // color += LOAD_TEXTURE2D(_MainTex, coord + int2(1, 0));
-                // color += LOAD_TEXTURE2D(_MainTex, coord + int2(0, 1));
-                // color += LOAD_TEXTURE2D(_MainTex, coord + int2(1, 1));
-                // color *= 0.25f;
 
                 float2 uv = (coord + 1.0f) * _MainTex_TexelSize.xy;
-                color += SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv);
+                float3 offset = float3(_MainTex_TexelSize.xy * 2.0f, 0.0f);
+                half4 a = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv);
+                half4 b = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.xz);
+                half4 c = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.zy);
+                half4 d = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.xy);
 
-                // float4 offset = float4(_MainTex_TexelSize.xy, -_MainTex_TexelSize.xy) * 1.33f;
-                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_PointClamp, uv + offset.xy);
-                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_PointClamp, uv + offset.zy);
-                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_PointClamp, uv + offset.xw);
-                // color += SAMPLE_TEXTURE2D(_MainTex, sampler_PointClamp, uv + offset.zw);
-                // color *= 0.25f;
-
+                // Bilinear Interpolation.
+                float2 w = fmod(input.texcoord * _MainTex_TexelSize.zw * 0.5f, 1.0f);
+                half4 color = lerp(
+                    lerp(a, b, w.x),
+                    lerp(c, d, w.x),
+                    w.y
+                );
 
                 half4 gbuffer0 = SAMPLE_TEXTURE2D(_GBuffer0, sampler_PointClamp, input.texcoord);
                 return color * gbuffer0;

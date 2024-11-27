@@ -25,6 +25,15 @@ RWTexture2D<float4> _Cascade3;
 RWTexture2D<float4> _Cascade4;
 RWTexture2D<float4> _Cascade5;
 
+int2 calculateRange(int cascadeLevel)
+{
+    const float factor = 4.0;
+
+    float start = (1.0 - pow(factor, cascadeLevel)) / (1.0 - factor);
+    float end = (1.0 - pow(factor, cascadeLevel + 1.0)) / (1.0 - factor);
+
+    return int2(start, end);
+}
 
 float _ProbeSize;
 float _CascadeLevel;
@@ -51,11 +60,16 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     sincos(angle, ray.y, ray.x);
 
     // NOTE: Scale ray to [0; 1] range
-    ray *= _CascadeBufferSize.zw * StepSize;
-    probeCenterUV += ray * 2.0f * _ProbeSize * _CascadeLevel;
+    ray *= _CascadeBufferSize.zw;
 
-    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.01f;
-    int stepsCount = floor(2.0f * _ProbeSize * (_CascadeLevel + 1));
+    int2 cascadeRange = calculateRange(_CascadeLevel) * 2;
+
+    // Offseting center
+    probeCenterUV += ray * cascadeRange.x; //_ProbeSize * (_CascadeLevel > 0.5f);
+
+    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.001f;
+    int stepsCount = floor(_ProbeSize * (_CascadeLevel + 1));
+    stepsCount = cascadeRange.y - cascadeRange.x;
     _OutCascade[coords] = RayTrace(probeCenterUV, ray, sceneDepth, stepsCount);
 }
 
@@ -147,9 +161,15 @@ void MergeCascades(uint3 id : SV_DispatchThreadID)
     }
 
     float4 radiance = _LowerCascade[coords]; // Radiance from lower cascade
-    uint cascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel);
+    if (radiance.a < 0.5f)
+    {
+        _LowerCascade[id.xy] = radiance;
+        return;
+    }
+
+    float cascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel);
     int2 coordsInCascade = fmod(coords, cascadeDim);
-    float angleStep = TWO_PI / (float)(cascadeDim * cascadeDim);
+    float angleStep = TWO_PI / (cascadeDim * cascadeDim);
     float angle = (coordsInCascade.x + coordsInCascade.y * cascadeDim) * angleStep;
     angle += angleStep * 0.5f;
 

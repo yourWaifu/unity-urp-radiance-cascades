@@ -1,3 +1,4 @@
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
 float4 _ColorTexture_TexelSize;
@@ -40,7 +41,7 @@ float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
         float2 uv = probeUV + offset;
         if (any(uv < 0) || any(uv > 1))
         {
-            return half4(0.0f, 0.0f, 0.0f, 0.0f);
+            return half4(0.0f, 0.0f, 0.0f, 1.0f);
         }
 
         float currentDepth = SampleLinearDepth(uv);
@@ -51,11 +52,11 @@ float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
         if (sceneDepth > currentDepth && sceneDepth - currentDepth < 0.2f)
         {
             float3 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, uv, 0).rgb;
-            return float4(color.rgb, 1.0f);
+            return float4(color.rgb, 0.0f);
         }
     }
 
-    return half4(0.0f, 0.0f, 0.0f, 0.0f);
+    return half4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 
