@@ -95,13 +95,6 @@ public class RadianceCascadesPass : ScriptableRenderPass
             return;
         }
 
-        var colorTextureTexelSize = new Vector4(
-            colorTextureRT.width,
-            colorTextureRT.height,
-            1.0f / colorTextureRT.width,
-            1.0f / colorTextureRT.height
-        );
-
         using (new ProfilingScope(cmd, _profilingSampler))
         {
             context.ExecuteCommandBuffer(cmd);
@@ -138,7 +131,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
                         cmd,
                         colorTexture,
                         renderingData.cameraData.renderer.cameraDepthTargetHandle,
-                        2 << (level + 1),
+                        2 << level,
                         level,
                         _Cascades[level]
                     );

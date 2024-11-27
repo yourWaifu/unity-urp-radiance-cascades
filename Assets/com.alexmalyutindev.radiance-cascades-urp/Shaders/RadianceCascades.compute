@@ -54,7 +54,7 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     ray *= _CascadeBufferSize.zw * StepSize;
     probeCenterUV += ray * 2.0f * _ProbeSize * _CascadeLevel;
 
-    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.05f;
+    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.01f;
     int stepsCount = floor(2.0f * _ProbeSize * (_CascadeLevel + 1));
     _OutCascade[coords] = RayTrace(probeCenterUV, ray, sceneDepth, stepsCount);
 }
@@ -79,7 +79,7 @@ float4 AverageNearbyAngles(int2 coords, float angle)
     //Transform the angle to an index value inside the upperCascade
     float angleStep = (2 * PI) / (float)(upperCascadeDim * upperCascadeDim);
     int index = AngleToIndex(angle - angleStep / 2, upperCascadeDim);
-    //We substract a small offset to get a correct index value
+    //We subtract a small offset to get a correct index value
     //You can try to remove it and you will see the difference
 
     int2 angle1Position = coords + IndexToCoords(index - 1, upperCascadeDim);
@@ -151,7 +151,7 @@ void MergeCascades(uint3 id : SV_DispatchThreadID)
     int2 coordsInCascade = fmod(coords, cascadeDim);
     float angleStep = TWO_PI / (float)(cascadeDim * cascadeDim);
     float angle = (coordsInCascade.x + coordsInCascade.y * cascadeDim) * angleStep;
-    angle += angleStep / 2;
+    angle += angleStep * 0.5f;
 
     //After getting the angle we then sample the 4 nearby probes in the upper cascade in that angle (or direction as other say)
     float4 upperRadiance = SampleNearbyProbes(coords, angle);

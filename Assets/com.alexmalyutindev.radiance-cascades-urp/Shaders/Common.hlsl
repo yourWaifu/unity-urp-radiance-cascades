@@ -48,7 +48,7 @@ float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
         // (0)----------------| scene depth
         // (1)----------|     | current depth
         //              |     |
-        if (sceneDepth > currentDepth && sceneDepth - currentDepth < .2f)
+        if (sceneDepth > currentDepth && sceneDepth - currentDepth < 0.2f)
         {
             float3 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, uv, 0).rgb;
             return float4(color.rgb, 1.0f);
