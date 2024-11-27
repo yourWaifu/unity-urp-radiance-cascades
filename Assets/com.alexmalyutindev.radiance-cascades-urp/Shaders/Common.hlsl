@@ -1,7 +1,9 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
 float4 _ColorTexture_TexelSize;
+float4 _DepthTexture_TexelSize;
 Texture2D _ColorTexture;
 Texture2D<float> _DepthTexture;
 Texture2D<half3> _NormalsTexture;
@@ -28,35 +30,33 @@ float2 GetRayDirection(int2 texCoord, float probeSize)
 
 inline float SampleLinearDepth(float2 uv)
 {
-    float rawDepth = SAMPLE_TEXTURE2D_LOD(_DepthTexture, sampler_PointClamp, uv, 0).r;
-    return LinearEyeDepth(rawDepth, _ZBufferParams);
+    // float rawDepth = SAMPLE_TEXTURE2D_LOD(_DepthTexture, sampler_PointClamp, uv, 0).r;
+    float rawDepth = LOAD_TEXTURE2D(_DepthTexture, uv * _ColorTexture_TexelSize.xy).r;
+    return rawDepth;
+    // return LinearEyeDepth(rawDepth, zBufferParams);
 }
 
 float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
 {
+    float2 uv = probeUV;
+    float4 color =  float4(0.0f, 0.0f, 0.0f, 1.0f);
     for (int i = 0; i < stepsCount; i++)
     {
-        float2 offset = i * ray;
-
-        float2 uv = probeUV + offset;
+        uv += ray;
         if (any(uv < 0) || any(uv > 1))
         {
-            return half4(0.0f, 0.0f, 0.0f, 1.0f);
+            break;
         }
 
-        float currentDepth = SampleLinearDepth(uv);
-        // Intersection
-        // (0)----------------| scene depth
-        // (1)----------|     | current depth
-        //              |     |
-        if (sceneDepth > currentDepth && sceneDepth - currentDepth < 0.2f)
+        float currentDepth = LOAD_TEXTURE2D(_DepthTexture, uv * _ColorTexture_TexelSize.xy).r;
+        if (sceneDepth < currentDepth)
         {
-            float3 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, uv, 0).rgb;
-            return float4(color.rgb, 0.0f);
+            color = float4(1.0f, 1.0f, 1.0f, 0.0f);
+            break;
         }
     }
 
-    return half4(0.0f, 0.0f, 0.0f, 1.0f);
+    return color * SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, uv, 0);
 }
 
 
@@ -67,7 +67,7 @@ int AngleToIndex(float angle, int dim)
     return index;
 }
 
-int2 IndexToCoords(int index, int dim)
+int2 IndexToCoords(float index, float dim)
 {
     //in case the index is lower than 0 or higher than the number of angles
     index = index % (dim * dim);

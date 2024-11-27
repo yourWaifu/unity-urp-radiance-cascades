@@ -158,8 +158,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
             sampleKey = "Combine";
             cmd.BeginSample(sampleKey);
             {
-                // cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
-                cmd.Blit(_Cascades[0], colorTexture, _blit, 0);
+                cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
+                Blitter.BlitTexture(cmd, _Cascades[0], new Vector4(0, 0, 1, 1), _blit, 0);
             }
             cmd.EndSample(sampleKey);
         }

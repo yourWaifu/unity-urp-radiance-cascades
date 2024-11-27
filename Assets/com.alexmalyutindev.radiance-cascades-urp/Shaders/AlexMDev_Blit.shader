@@ -15,7 +15,7 @@ Shader "Hidden/RadianceCascade/Blit"
         Pass
         {
             Name "Combine"
-            ZTest Off
+            ZTest Greater
             ZWrite Off
             Blend One One
 
@@ -29,8 +29,9 @@ Shader "Hidden/RadianceCascade/Blit"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareNormalsTexture.hlsl"
 
             TEXTURE2D(_GBuffer0);
-            TEXTURE2D(_MainTex);
-            float4 _MainTex_TexelSize;
+            TEXTURE2D(_BlitTexture);
+            float4 _BlitTexture_TexelSize;
+            float3 _CameraForward;
 
             #if SHADER_API_GLES
             struct Attributes
@@ -68,34 +69,35 @@ Shader "Hidden/RadianceCascade/Blit"
                 float2 uv = GetFullScreenTriangleTexCoord(input.vertexID);
                 #endif
 
+                pos.z = UNITY_RAW_FAR_CLIP_VALUE;
                 output.positionCS = pos;
                 output.texcoord = uv;
                 return output;
             }
 
-            float3 _CameraForward;
 
             half4 Fragment(Varyings input) : SV_TARGET
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                half depth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_PointClamp, input.texcoord).x;
-                if (depth == UNITY_RAW_FAR_CLIP_VALUE)
-                {
-                    clip(-1);
-                }
+                // half depth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_PointClamp, input.texcoord).x;
+                // if (depth == UNITY_RAW_FAR_CLIP_VALUE)
+                // {
+                //     clip(-1);
+                // }
 
-                int2 coord = floor(input.texcoord * _MainTex_TexelSize.zw * 0.5f) * 2.0f;
+                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw * 0.5f;
+                const float2 w = fmod(temp, 1.0f);
+                const int2 coord = floor(temp) * 2.0f;
 
-                float2 uv = (coord + 1.0f) * _MainTex_TexelSize.xy;
-                float3 offset = float3(_MainTex_TexelSize.xy * 2.0f, 0.0f);
-                half4 a = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv);
-                half4 b = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.xz);
-                half4 c = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.zy);
-                half4 d = SAMPLE_TEXTURE2D(_MainTex, sampler_LinearClamp, uv + offset.xy);
+                float2 uv = (coord + 1.0f) * _BlitTexture_TexelSize.xy;
+                float3 offset = float3(_BlitTexture_TexelSize.xy * 2.0f, 0.0f);
+                half4 a = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv) * 4;
+                half4 b = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xz) * 4;
+                half4 c = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.zy) * 4;
+                half4 d = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy) * 4;
 
                 // Bilinear Interpolation.
-                float2 w = fmod(input.texcoord * _MainTex_TexelSize.zw * 0.5f, 1.0f);
                 half4 color = lerp(
                     lerp(a, b, w.x),
                     lerp(c, d, w.x),
@@ -106,9 +108,9 @@ Shader "Hidden/RadianceCascade/Blit"
                 return color * gbuffer0;
 
                 half3 normalWS = SampleSceneNormals(input.texcoord);
-                half NdotV = dot(normalWS, -_CameraForward);
+                half angleFade = 1.0h - abs(dot(normalWS, -_CameraForward));
 
-                return color * gbuffer0 * NdotV;
+                return color * gbuffer0 * angleFade;
             }
             ENDHLSL
         }

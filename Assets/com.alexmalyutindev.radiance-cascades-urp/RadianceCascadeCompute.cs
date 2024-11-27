@@ -26,11 +26,18 @@ namespace AlexMalyutinDev.RadianceCascades
         )
         {
             var rt = target.rt;
+            var depthRT = depth.rt;
 
             cmd.SetComputeFloatParam(_compute, "_ProbeSize", probeSize);
             cmd.SetComputeFloatParam(_compute, "_CascadeLevel", cascadeLevel);
             var cascadeSize = new Vector4(rt.width, rt.height, 1.0f / rt.width, 1.0f / rt.height);
             cmd.SetComputeVectorParam(_compute, "_CascadeBufferSize", cascadeSize);
+
+            cmd.SetComputeVectorParam(
+                _compute,
+                "_ColorTexture_TexelSize",
+                new Vector4(depthRT.width, depthRT.height, 1.0f / depthRT.width, 1.0f / depthRT.height)
+            );
 
             cmd.SetComputeTextureParam(_compute, _renderKernel, "_ColorTexture", color);
             cmd.SetComputeTextureParam(_compute, _renderKernel, "_DepthTexture", depth);

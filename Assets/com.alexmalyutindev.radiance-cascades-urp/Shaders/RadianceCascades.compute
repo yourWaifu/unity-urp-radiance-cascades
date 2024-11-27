@@ -1,7 +1,6 @@
 #pragma kernel RenderCascade
 #pragma kernel MergeCascades
 
-#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Common.hlsl"
 
@@ -32,14 +31,16 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     // NOTE: Scale ray to [0; 1] range
     ray *= _CascadeBufferSize.zw;
 
-    int2 cascadeRange = CalculateRange(_CascadeLevel) * 2;
+    int2 cascadeRange = CalculateRange(_CascadeLevel);
 
     // Offsetting center
     probeCenterUV += ray * cascadeRange.x;
 
-    float sceneDepth = SampleLinearDepth(probeCenterUV) - 0.001f;
+    float sceneDepth = SampleLinearDepth(probeCenterUV) + 0.00001f;
     int stepsCount = floor(_ProbeSize * (_CascadeLevel + 1));
     stepsCount = cascadeRange.y - cascadeRange.x;
+
+    // TODO: Use int coords instead of uv. 
     _OutCascade[coords] = RayTrace(probeCenterUV, ray, sceneDepth, stepsCount);
 }
 
@@ -98,7 +99,7 @@ float4 SampleNearbyProbes(int2 coords, float angle)
     //(this code gets the position of the bottom-left one)
     int2 upperCascadeIndex = floor((lowerCascadeIndex - 0.5) / 2.0);
     int2 upperCascadeOriginPos = upperCascadeIndex * upperCascadeDim;
-    int2 upperCascadeCenterPos = upperCascadeOriginPos + upperCascadeDim / 2;
+    int2 upperCascadeCenterPos = upperCascadeOriginPos + upperCascadeDim * 0.5f;
 
     // Since we know the position of the bottom-left probe, the others can be reached just with adding a simple offset
     // the function AverageNearbyAngles() will take care of the rest and find the 4 nearest angle to the one we want and averge them
