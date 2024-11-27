@@ -1,4 +1,4 @@
-Shader "AlexMDev/Blit"
+Shader "Hidden/RadianceCascade/Blit"
 {
     Properties
     {
@@ -18,7 +18,6 @@ Shader "AlexMDev/Blit"
             ZTest Off
             ZWrite Off
             Blend One One
-            //            Blend One Zero
 
             HLSLPROGRAM
             #pragma vertex Vertex
@@ -36,8 +35,8 @@ Shader "AlexMDev/Blit"
             #if SHADER_API_GLES
             struct Attributes
             {
-                float4 positionOS       : POSITION;
-                float2 uv               : TEXCOORD0;
+                float4 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
             #else
@@ -107,9 +106,9 @@ Shader "AlexMDev/Blit"
                 return color * gbuffer0;
 
                 half3 normalWS = SampleSceneNormals(input.texcoord);
-                half bling = 1.0h - abs(dot(normalWS, -_CameraForward));
+                half NdotV = dot(normalWS, -_CameraForward);
 
-                return color * gbuffer0 * bling;
+                return color * gbuffer0 * NdotV;
             }
             ENDHLSL
         }

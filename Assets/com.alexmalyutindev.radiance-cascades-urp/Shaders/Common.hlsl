@@ -60,17 +60,29 @@ float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
 }
 
 
-int AngleToIndex(float angle, int dim) {
+int AngleToIndex(float angle, int dim)
+{
     float t = angle / (2 * PI);
     int index = floor(t * float(dim * dim));
     return index;
 }
 
-int2 IndexToCoords(int index, int dim) {
+int2 IndexToCoords(int index, int dim)
+{
     //in case the index is lower than 0 or higher than the number of angles
     index = index % (dim * dim);
     int x = index % dim;
     int y = index / dim;
 
     return int2(x, y);
+}
+
+int2 CalculateRange(int cascadeLevel)
+{
+    const float factor = 4.0;
+
+    float start = (1.0 - pow(factor, cascadeLevel)) / (1.0 - factor);
+    float end = (1.0 - pow(factor, cascadeLevel + 1.0)) / (1.0 - factor);
+
+    return int2(start, end);
 }

@@ -6,14 +6,12 @@ namespace AlexMalyutinDev.RadianceCascades
     public class RadianceCascadeCompute
     {
         private readonly ComputeShader _compute;
-        private readonly int _mainKernel;
         private readonly int _mergeKernel;
         private readonly int _renderKernel;
 
         public RadianceCascadeCompute(ComputeShader compute)
         {
             _compute = compute;
-            _mainKernel = _compute.FindKernel("Main");
             _mergeKernel = _compute.FindKernel("MergeCascades");
             _renderKernel = _compute.FindKernel("RenderCascade");
         }

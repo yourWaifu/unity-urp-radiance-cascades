@@ -22,7 +22,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
     private readonly ComputeShader _radianceCascadesCs;
     private readonly RadianceCascadeCompute _compute;
-    private readonly int _mainKernel;
+    private readonly int _renderCascadeKernel;
 
 
     // High:
@@ -46,7 +46,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
         _compute = new RadianceCascadeCompute(_radianceCascadesCs);
 
         _blit = blit;
-        _mainKernel = _radianceCascadesCs.FindKernel("Main");
+        _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
         ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
     }
 
@@ -109,19 +109,19 @@ public class RadianceCascadesPass : ScriptableRenderPass
                 // TODO: Move into arguments of RenderCascade(...)
                 cmd.SetComputeTextureParam(
                     _radianceCascadesCs,
-                    _mainKernel,
+                    _renderCascadeKernel,
                     "_ColorTexture",
                     colorTexture // gBuffer0 //
                 );
                 cmd.SetComputeTextureParam(
                     _radianceCascadesCs,
-                    _mainKernel,
+                    _renderCascadeKernel,
                     "_NormalsTexture",
                     renderingData.cameraData.renderer.GetGBuffer(2) // Normals
                 );
                 cmd.SetComputeTextureParam(
                     _radianceCascadesCs,
-                    _mainKernel,
+                    _renderCascadeKernel,
                     "_DepthTexture",
                     renderingData.cameraData.renderer.cameraDepthTargetHandle
                 );
