@@ -6,7 +6,6 @@
 
 float _ProbeSize;
 float _CascadeLevel;
-float4 _CascadeBufferSize;
 RWTexture2D<float4> _OutCascade;
 
 [numthreads(8,8,1)]
@@ -36,7 +35,7 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     // Offsetting center
     probeCenterUV += ray * cascadeRange.x;
 
-    float sceneDepth = SampleLinearDepth(probeCenterUV) + 0.00001f;
+    float sceneDepth = SampleLinearDepth(probeCenterUV) + 0.0001f;
     int stepsCount = floor(_ProbeSize * (_CascadeLevel + 1));
     stepsCount = cascadeRange.y - cascadeRange.x;
 

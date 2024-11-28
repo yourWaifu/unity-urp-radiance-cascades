@@ -22,6 +22,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
     private readonly ComputeShader _radianceCascadesCs;
     private readonly RadianceCascadeCompute _compute;
+    private readonly RadianceCascade3dCompute _compute3d;
     private readonly int _renderCascadeKernel;
 
 
@@ -31,7 +32,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
     //        [128,  64, 32, 16,  8, 4] - vertical probes 
     // Medium:
     // ...
-    private static Vector2Int[] Resolutions = {
+    private static Vector2Int[] Resolutions =
+    {
         new(32 * 16, 32 * 9), // 256x144 probes0
         new(32 * 10, 32 * 6), // 160x96 probes0
         new(32 * 7, 32 * 4), // 112x64 probes0
@@ -39,11 +41,13 @@ public class RadianceCascadesPass : ScriptableRenderPass
         new(32 * 3, 32 * 2), // 48x32 probes0
     };
 
-    public RadianceCascadesPass(ComputeShader radianceCascadesCs, Material blit)
+    public RadianceCascadesPass(ComputeShader radianceCascadesCs, ComputeShader radianceCascades3d, Material blit)
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
         _radianceCascadesCs = radianceCascadesCs;
+
         _compute = new RadianceCascadeCompute(_radianceCascadesCs);
+        _compute3d = new RadianceCascade3dCompute(radianceCascades3d);
 
         _blit = blit;
         _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
@@ -76,6 +80,16 @@ public class RadianceCascadesPass : ScriptableRenderPass
             );
         }
 
+        var decs2 = new RenderTextureDescriptor(128 * 3, 64 * 2)
+        {
+            colorFormat = RenderTextureFormat.ARGBHalf,
+            enableRandomWrite = true,
+        };
+        RenderingUtils.ReAllocateIfNeeded(
+            ref _Cascades0,
+            decs2
+        );
+
         var desc1 = new RenderTextureDescriptor(cameraTextureDescriptor.width / 2, cameraTextureDescriptor.height / 2)
         {
             colorFormat = RenderTextureFormat.ARGB2101010,
@@ -102,7 +116,24 @@ public class RadianceCascadesPass : ScriptableRenderPass
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
-            var sampleKey = "RenderCascades";
+            var sampleKey = "RenderCascades3D";
+            cmd.BeginSample(sampleKey);
+            {
+                int level = 2;
+                _compute3d.RenderCascade(
+                    cmd,
+                    ref renderingData,
+                    colorTexture,
+                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                    1 << level,
+                    level,
+                    _Cascades0
+                );
+            }
+            cmd.EndSample(sampleKey);
+
+
+            sampleKey = "RenderCascades";
             cmd.BeginSample(sampleKey);
             {
                 // Shared

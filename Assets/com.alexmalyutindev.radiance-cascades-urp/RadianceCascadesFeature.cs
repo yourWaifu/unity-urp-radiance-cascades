@@ -1,16 +1,21 @@
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Serialization;
 
 public class RadianceCascadesFeature : ScriptableRendererFeature
 {
     public Material BlitMaterial;
-    public ComputeShader _radianceCascadesCs;
+    [FormerlySerializedAs("_radianceCascadesCs")]
+    public ComputeShader RadianceCascades;
+    [FormerlySerializedAs("_radianceCascadesCs")]
+    public ComputeShader RadianceCascades3d;
+
 
     private RadianceCascadesPass _pass;
 
     public override void Create()
     {
-        _pass = new RadianceCascadesPass(_radianceCascadesCs, BlitMaterial)
+        _pass = new RadianceCascadesPass(RadianceCascades, RadianceCascades3d, BlitMaterial)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingSkybox
         };
@@ -18,7 +23,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        if (_radianceCascadesCs == null || BlitMaterial == null)
+        if (RadianceCascades == null || RadianceCascades3d == null || BlitMaterial == null)
         {
             return;
         }
@@ -27,9 +32,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
         {
             return;
         }
-        
+
         renderer.EnqueuePass(_pass);
     }
 }
-
-

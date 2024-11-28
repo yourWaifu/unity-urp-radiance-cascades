@@ -1,0 +1,114 @@
+#pragma kernel RenderCascade
+#pragma kernel MergeCascade
+
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+// Layout:
+// .______________.
+// | +X | +Y | +Z |
+// |____|____|____|
+// | -X | -Y | -Z |
+// |____|____|____|
+RWTexture2D<float4> _OutCascade;
+int2 _ProbesCount;
+
+float _ProbeSize;
+float4 _CascadeBufferSize;
+
+float4x4 _ViewProjection;
+
+static const float3 Axes[6] =
+{
+    float3(1.0f, 0.0f, 0.0f),
+    float3(0.0f, 1.0f, 0.0f),
+    float3(0.0f, 0.0f, 1.0f),
+    float3(-1.0f, 0.0f, 0.0f),
+    float3(0.0f, -1.0f, 0.0f),
+    float3(0.0f, 0.0f, -1.0f),
+};
+
+static const half3x3 Basis[6] =
+{
+    // +X
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        0.0h, 1.0h, 0.0h,
+        1.0h, 0.0h, 0.0h
+    ),
+    // +Y
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h
+    ),
+    // +Z
+    half3x3(
+        1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h,
+        0.0h, 0.0h, 1.0h
+    ),
+    // -X
+    half3x3(
+        0.0h, 0.0h, 1.0h,
+        0.0h, 1.0h, 0.0h,
+        -1.0h, 0.0h, 0.0h
+    ),
+    // -Y
+    half3x3(
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 0.0h, -1.0h,
+        0.0h, -1.0h, 0.0h
+    ),
+    // -Z
+    half3x3(
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h,
+        0.0h, 0.0h, -1.0h
+    ),
+};
+
+[numthreads(8,8,1)]
+void RenderCascade(uint3 id : SV_DispatchThreadID)
+{
+    uint2 coords = id.xy;
+
+    float2 sideSize = _CascadeBufferSize.xy / float2(3, 2);
+
+    int probeSide = dot(floor(coords / sideSize), float2(1, 3));
+    float2 indexInProbe = floor(fmod(coords, _ProbeSize));
+
+    float3 ray = float3(0, 0, 1);
+    ray.xy += indexInProbe / _ProbeSize - 0.5f;
+    ray = normalize(mul(Basis[probeSide], ray));
+
+    float3 rayCS = mul(_ViewProjection, float4(ray, 0.0f));
+
+    // TODO: Ray tracing.  
+    _OutCascade[coords] = float4(rayCS.xy, 0, 1);
+
+
+    // float2 uv = fmod(coords * _CascadeBufferSize.zw * float2(3, 2), 1.0f);
+    // int probeSide = dot(floor(coords * _CascadeBufferSize.zw * float2(3, 2)), float2(1, 3));
+    //
+    // float2 probeIndex = floor(uv * _CascadeBufferSize.xy / float2(3, 2) / _ProbeSize);
+    // float3 ray = Axes[probeSide];
+    //
+    // int2 indexInProbe = fmod(probeIndex, _ProbeSize);
+    //
+    // // TODO: Offset ray
+    // ray.xy += indexInProbe / _ProbeSize - 0.5f;
+    // ray = normalize(mul(Basis[probeSide], ray));
+    //
+    // float3 rayCS = mul(_ViewProjection, float4(ray, 0.0f));
+    //
+    // _OutCascade[coords] = float4(rayCS.xy, 0, 1);
+    // _OutCascade[coords] = float4(indexInProbe.xy / _ProbeSize, 0, 1);
+    // _OutCascade[coords] = float4(probeIndex.xy / _ProbeSize, 0, 1);
+}
+
+
+[numthreads(8,8,1)]
+void MergeCascade(uint3 id : SV_DispatchThreadID)
+{
+    _OutCascade[id.xy] = 1;
+}

@@ -4,6 +4,8 @@
 
 float4 _ColorTexture_TexelSize;
 float4 _DepthTexture_TexelSize;
+float4 _CascadeBufferSize;
+
 Texture2D _ColorTexture;
 Texture2D<float> _DepthTexture;
 Texture2D<half3> _NormalsTexture;
@@ -38,6 +40,8 @@ inline float SampleLinearDepth(float2 uv)
 
 float4 RayTrace(float2 probeUV, float2 ray, float sceneDepth, int stepsCount)
 {
+    // TODO: Cast ray in Depth target pixel coords (or use downscaled version).
+    // ray *= _CascadeBufferSize.xy * _ColorTexture_TexelSize.zw;
     float2 uv = probeUV;
     float4 color =  float4(0.0f, 0.0f, 0.0f, 1.0f);
     for (int i = 0; i < stepsCount; i++)
