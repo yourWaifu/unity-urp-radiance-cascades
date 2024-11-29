@@ -61,8 +61,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
         // var probesCountY = cameraTextureDescriptor.height / 4;
 
         var desc = new RenderTextureDescriptor(
-            Resolutions[1].x,
-            Resolutions[1].y
+            Resolutions[0].x,
+            Resolutions[0].y
         )
         {
             colorFormat = RenderTextureFormat.ARGBHalf,
