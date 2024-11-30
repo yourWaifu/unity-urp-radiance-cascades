@@ -13,7 +13,10 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private RTHandle _Cascades0;
 
     private RTHandle[] _Cascades = new RTHandle[CascadesCount];
-    private static readonly string[] _cascadeNames = GenCascadeNames(CascadesCount);
+    private static readonly string[] _cascadeNames = GenNames("_Cascade", CascadesCount);
+
+    private RTHandle[] _Cascades3d = new RTHandle[CascadesCount];
+    private static readonly string[] _cascade3dNames = GenNames("_Cascade3d", CascadesCount);
 
     private RTHandle _BlurBuffer0;
     private RTHandle _BlurBuffer1;
@@ -85,10 +88,16 @@ public class RadianceCascadesPass : ScriptableRenderPass
             colorFormat = RenderTextureFormat.ARGBHalf,
             enableRandomWrite = true,
         };
-        RenderingUtils.ReAllocateIfNeeded(
-            ref _Cascades0,
-            decs2
-        );
+        for (int i = 0; i < _Cascades3d.Length; i++)
+        {
+            RenderingUtils.ReAllocateIfNeeded(
+                ref _Cascades3d[i],
+                decs2,
+                name: _cascade3dNames[i],
+                filterMode: FilterMode.Point,
+                wrapMode: TextureWrapMode.Clamp
+            );
+        }
 
         var desc1 = new RenderTextureDescriptor(cameraTextureDescriptor.width / 2, cameraTextureDescriptor.height / 2)
         {
@@ -119,16 +128,30 @@ public class RadianceCascadesPass : ScriptableRenderPass
             var sampleKey = "RenderCascades3D";
             cmd.BeginSample(sampleKey);
             {
-                int level = 2;
-                _compute3d.RenderCascade(
-                    cmd,
-                    ref renderingData,
-                    colorTexture,
-                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
-                    1 << level,
-                    level,
-                    _Cascades0
-                );
+                for (int level = 0; level < _Cascades.Length; level++)
+                {
+                    _compute3d.RenderCascade(
+                        cmd,
+                        ref renderingData,
+                        colorTexture,
+                        renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                        1 << level,
+                        level,
+                        _Cascades3d[level]
+                    );
+                }
+
+                for (int level = _Cascades.Length - 1; level > 0; level--)
+                {
+                    _compute3d.MergeCascades(
+                        cmd,
+                        _Cascades3d[level - 1],
+                        _Cascades3d[level],
+                        level - 1
+                    );
+                }
+                
+                Blitter.BlitTexture(cmd, _Cascades3d[0], new Vector4(1f / 3f, 1f / 2f, 0, 0), _blit, 1);
             }
             cmd.EndSample(sampleKey);
 
@@ -190,7 +213,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
             cmd.BeginSample(sampleKey);
             {
                 cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
-                Blitter.BlitTexture(cmd, _Cascades[0], new Vector4(0, 0, 1, 1), _blit, 0);
+                // Blitter.BlitTexture(cmd, _Cascades[0], Vector4.zero, _blit, 0);
             }
             cmd.EndSample(sampleKey);
         }
@@ -222,12 +245,12 @@ public class RadianceCascadesPass : ScriptableRenderPass
     }
 
 
-    private static string[] GenCascadeNames(int n)
+    private static string[] GenNames(string name, int n)
     {
         var names = new string[n];
         for (int i = 0; i < n; i++)
         {
-            names[i] = "_Cascade" + i;
+            names[i] = name + i;
         }
 
         return names;
