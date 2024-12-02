@@ -80,7 +80,7 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
     float3 direction = float3(0, 0, 1);
-    direction.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) - 0.5f;
+    direction.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) * 2.0f - 1.0f;
     direction = normalize(mul(Basis[probeSide], direction));
 
     float3 rayCS = mul(_ViewProjection, float4(direction, 0.0f));

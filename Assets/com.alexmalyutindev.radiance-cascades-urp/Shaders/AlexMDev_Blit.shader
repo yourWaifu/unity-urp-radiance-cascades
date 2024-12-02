@@ -201,7 +201,7 @@ Shader "Hidden/RadianceCascade/Blit"
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.0f, 0.5f));
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.3333f, 0.5f));
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.6666f, 0.5f));
-                return half4(test.rgb * 0.166666h, 1);
+                return half4(test.rgb, 1);
                 return half4(uv, 0, 1);
 
                 // float2 uv = (coord + 1.0f) * _BlitTexture_TexelSize.xy;
