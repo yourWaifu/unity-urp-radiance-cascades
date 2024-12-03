@@ -245,7 +245,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
         cmd.BeginSample(sampleKey);
         {
             cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
-            Blitter.BlitTexture(cmd, _Cascades[0], Vector4.zero, _blit, 0);
+            BlitUtils.BlitTexture(cmd, _Cascades[0], _blit, 0);
         }
         cmd.EndSample(sampleKey);
     }
