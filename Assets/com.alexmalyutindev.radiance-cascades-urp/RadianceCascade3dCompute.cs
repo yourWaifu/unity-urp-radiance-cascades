@@ -37,7 +37,7 @@ namespace AlexMalyutinDev.RadianceCascades
 
 
             var view = renderingData.cameraData.GetViewMatrix();
-            var proj = renderingData.cameraData.GetProjectionMatrix();
+            var proj = renderingData.cameraData.GetGPUProjectionMatrix();
 
             var viewProj = proj * view;
             cmd.SetComputeMatrixParam(_compute, "_View", view);

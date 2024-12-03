@@ -77,7 +77,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
             );
         }
 
-        var decs2 = new RenderTextureDescriptor(128 * 3 * 4, 64 * 2 * 4)
+        var scale = 3;
+        var decs2 = new RenderTextureDescriptor(128 * 3 * scale, 64 * 2 * scale)
         {
             colorFormat = RenderTextureFormat.ARGBHalf,
             enableRandomWrite = true,

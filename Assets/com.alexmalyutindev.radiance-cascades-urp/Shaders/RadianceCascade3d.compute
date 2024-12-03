@@ -29,6 +29,7 @@ static const float3 Axes[6] =
     float3(0.0f, 0.0f, -1.0f),
 };
 
+// TODO: Rotate basis, to look at diagonals
 static const half3x3 Basis[6] =
 {
     // +X
@@ -79,38 +80,68 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     }
 
     float2 sideSize = _CascadeBufferSize.xy / float2(3, 2);
+    float2 sideSizeRcp = float2(3, 2) * _CascadeBufferSize.zw;
 
-    float2 probeCenterUV = (floor(fmod(coords, sideSize) / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) / sideSize;
+    float2 probeCenterUV = (floor(fmod(coords, sideSize) / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) * sideSizeRcp;
 
     int probeSide = dot(floor(coords / sideSize), float2(1, 3));
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
-    float3 direction = float3(0.0f, 0.0f, 0.5f);
-    direction.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) * 2.0f - 1.0f;
+    float3 direction = float3(0.0f, 0.0f, 1.1f);
+    // [0, 1, 2, 3] -> 4
+    // [0..3] / (4 - 1) => [0..1] * 2 - 1 => [-1..1]
+    if (_ProbeSize > 1.1f)
+    {
+        // [1..4] / (4 + 1)
+        direction.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) * 2.0f - 1.0f;
+    }
     direction = mul(Basis[probeSide], normalize(direction));
 
+    // _OutCascade[coords] = float4(direction, 1);
+    // return;
 
     float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
     float3 positionWS = ComputeWorldSpacePosition(float4(probeCenterUV, sceneDepth, 1), _InvViewProjection);
 
-    positionWS += _View[2].xyz * 0.1f;
+    // BUG: Wrong camera forward vector!
+    // positionWS += normalize(_View[2].xyz) * 0.1f;
+
+    // BUG: Wrong offset, probably VP matrix is wrong, need to check!
+    float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
+    positionWS += viewDirectionWS * 0.0001f;
 
     int2 cascadeRange = CalculateRange(_CascadeLevel);
+    // _OutCascade[coords] = float4(cascadeRange.yyy < 0.001, 1);
+    // return;
 
-    float4 color = float4(0, 0, 0, 1);
+    float4 startUV = mul(_ViewProjection, float4(positionWS, 1));
+    startUV.xyz /= startUV.w;
+
+    // _OutCascade[coords] = float4(frac(startUV.xy), 0, 1);
+    // return;
+
+    float4 color = float4(0.0f, 0.0f, 0.0f, 1.0f);
     for (int i = cascadeRange.x; i < cascadeRange.y; i++)
     {
-        float3 ray = positionWS + direction * i * 0.1f;
+        float3 ray = positionWS + direction * i * 0.003f;
 
         float4 positionCS = mul(_ViewProjection, float4(ray, 1));
-        float2 screenUV = positionCS.xy / positionCS.w;
+        positionCS.xyz /= positionCS.w;
+        float2 screenUV = positionCS.xy;
 
-        // _OutCascade[coords] = float4(screenUV, 0, 1);
+        // _OutCascade[coords] = float4(frac(screenUV * 10), 0, 1);
+        // _OutCascade[coords] = float4(frac(ray * 10), 1);
+
+        // _OutCascade[coords] = float4(abs(startUV - screenUV) * 1000, 0, 1);
         // return;
 
-        if (any(screenUV < 0 || screenUV > 1)) break;
+        if (any(screenUV.xy < 0 || 1 < screenUV.xy)) break;
 
         float currentDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, screenUV, 0);
+
+        // _OutCascade[coords] = float4((currentDepth - positionCS).zzz > 0, 1);
+        // return;
+
         if (currentDepth > positionCS.z) // INTERSECTION!
         {
             color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, screenUV, 0);
