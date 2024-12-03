@@ -10,19 +10,13 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private const int CascadesCount = 5;
     private readonly ProfilingSampler _profilingSampler;
 
-    private RTHandle _Cascades0;
-
     private RTHandle[] _Cascades = new RTHandle[CascadesCount];
     private static readonly string[] _cascadeNames = GenNames("_Cascade", CascadesCount);
 
     private RTHandle[] _Cascades3d = new RTHandle[CascadesCount];
     private static readonly string[] _cascade3dNames = GenNames("_Cascade3d", CascadesCount);
 
-    private RTHandle _BlurBuffer0;
-    private RTHandle _BlurBuffer1;
-
     private readonly Material _blit;
-
     private readonly ComputeShader _radianceCascadesCs;
     private readonly RadianceCascadeCompute _compute;
     private readonly RadianceCascade3dCompute _compute3d;
@@ -98,14 +92,6 @@ public class RadianceCascadesPass : ScriptableRenderPass
                 wrapMode: TextureWrapMode.Clamp
             );
         }
-
-        var desc1 = new RenderTextureDescriptor(cameraTextureDescriptor.width / 2, cameraTextureDescriptor.height / 2)
-        {
-            colorFormat = RenderTextureFormat.ARGB2101010,
-            depthStencilFormat = GraphicsFormat.None,
-        };
-        RenderingUtils.ReAllocateIfNeeded(ref _BlurBuffer0, desc1, FilterMode.Bilinear);
-        RenderingUtils.ReAllocateIfNeeded(ref _BlurBuffer1, desc1, FilterMode.Bilinear);
     }
 
     public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
@@ -113,6 +99,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
         var cmd = CommandBufferPool.Get();
 
         var colorTexture = renderingData.cameraData.renderer.cameraColorTargetHandle;
+        var depthTexture = renderingData.cameraData.renderer.cameraDepthTargetHandle;
 
         var colorTextureRT = colorTexture.rt;
         if (colorTextureRT == null)
@@ -131,7 +118,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
             }
             else
             {
-                Cascades2d(renderingData, cmd, colorTexture);
+                Cascades2d(renderingData, cmd, colorTexture, depthTexture);
             }
         }
 
@@ -186,7 +173,12 @@ public class RadianceCascadesPass : ScriptableRenderPass
         cmd.EndSample(sampleKey);
     }
 
-    private void Cascades2d(RenderingData renderingData, CommandBuffer cmd, RTHandle colorTexture)
+    private void Cascades2d(
+        RenderingData renderingData,
+        CommandBuffer cmd,
+        RTHandle colorTexture,
+        RTHandle depthTexture
+    )
     {
         var sampleKey = "RenderCascades";
         cmd.BeginSample(sampleKey);
@@ -244,6 +236,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
         sampleKey = "Combine";
         cmd.BeginSample(sampleKey);
         {
+            cmd.SetRenderTarget(colorTexture, depthTexture);
             cmd.SetGlobalVector("_CameraForward", renderingData.cameraData.camera.transform.forward);
             BlitUtils.BlitTexture(cmd, _Cascades[0], _blit, 0);
         }
