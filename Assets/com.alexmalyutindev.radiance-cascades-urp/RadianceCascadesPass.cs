@@ -77,7 +77,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
             );
         }
 
-        var decs2 = new RenderTextureDescriptor(128 * 3 * 2, 64 * 2 * 2)
+        var decs2 = new RenderTextureDescriptor(128 * 3 * 4, 64 * 2 * 4)
         {
             colorFormat = RenderTextureFormat.ARGBHalf,
             enableRandomWrite = true,
@@ -164,13 +164,15 @@ public class RadianceCascadesPass : ScriptableRenderPass
             }
         }
         cmd.EndSample(sampleKey);
-        
-        PreviewCascades(cmd, _Cascades3d, 1.0f);
-        
+
+
         sampleKey = "Combine";
         cmd.BeginSample(sampleKey);
         Blitter.BlitTexture(cmd, _Cascades3d[0], new Vector4(1f / 3f, 1f / 2f, 0, 0), _blit, 1);
         cmd.EndSample(sampleKey);
+
+
+        PreviewCascades(cmd, _Cascades3d, 1.0f);
     }
 
     private void Cascades2d(

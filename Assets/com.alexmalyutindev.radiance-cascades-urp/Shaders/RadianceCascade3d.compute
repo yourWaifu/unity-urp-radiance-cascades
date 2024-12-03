@@ -15,7 +15,9 @@ int2 _ProbesCount;
 
 float _ProbeSize;
 float _CascadeLevel;
+float4x4 _View;
 float4x4 _ViewProjection;
+float4x4 _InvViewProjection;
 
 static const float3 Axes[6] =
 {
@@ -71,6 +73,10 @@ static const half3x3 Basis[6] =
 void RenderCascade(uint3 id : SV_DispatchThreadID)
 {
     uint2 coords = id.xy;
+    if (any(coords > _CascadeBufferSize.xy))
+    {
+        return;
+    }
 
     float2 sideSize = _CascadeBufferSize.xy / float2(3, 2);
 
@@ -79,31 +85,35 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     int probeSide = dot(floor(coords / sideSize), float2(1, 3));
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
-    float3 direction = float3(0, 0, 1);
+    float3 direction = float3(0.0f, 0.0f, 0.5f);
     direction.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) * 2.0f - 1.0f;
-    direction = normalize(mul(Basis[probeSide], direction));
+    direction = mul(Basis[probeSide], normalize(direction));
 
-    float3 rayCS = mul(_ViewProjection, float4(direction, 0.0f));
 
-    float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0) + 0.0001f;
-    float3 positionCS = float3(probeCenterUV, sceneDepth);
-    rayCS *= float3(_ColorTexture_TexelSize.zw, -_ProjectionParams.w);
+    float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
+    float3 positionWS = ComputeWorldSpacePosition(float4(probeCenterUV, sceneDepth, 1), _InvViewProjection);
+
+    positionWS += _View[2].xyz * 0.1f;
 
     int2 cascadeRange = CalculateRange(_CascadeLevel);
 
-    // TODO: Ray tracing.
     float4 color = float4(0, 0, 0, 1);
     for (int i = cascadeRange.x; i < cascadeRange.y; i++)
     {
-        float3 ray = positionCS + rayCS * i;
-        if (any(ray < 0 || ray > 1))
-            break;
+        float3 ray = positionWS + direction * i * 0.1f;
 
-        float currentDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, ray.xy, 0);
-        if (ray.z < currentDepth)
-        // if (sceneDepth < currentDepth)
+        float4 positionCS = mul(_ViewProjection, float4(ray, 1));
+        float2 screenUV = positionCS.xy / positionCS.w;
+
+        // _OutCascade[coords] = float4(screenUV, 0, 1);
+        // return;
+
+        if (any(screenUV < 0 || screenUV > 1)) break;
+
+        float currentDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, screenUV, 0);
+        if (currentDepth > positionCS.z) // INTERSECTION!
         {
-            color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, ray.xy, 0);
+            color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, screenUV, 0);
             color.a = 0.0f;
             break;
         }
@@ -120,11 +130,15 @@ RWTexture2D<float4> _LowerCascade;
 void MergeCascade(uint3 id : SV_DispatchThreadID)
 {
     int2 coords = id.xy;
+    if (any(coords > _CascadeBufferSize.xy))
+    {
+        return;
+    }
 
-    int2 upperCoords = floor(coords * 0.5f) * 2;
-    float4 radiance = _LowerCascade[upperCoords]; // Radiance from lower cascade
+    int2 upperCoords = floor(coords * 0.125f) * 8;
+    float4 radiance = _LowerCascade[coords]; // Radiance from lower cascade
 
-    float4 upperRadiance = _UpperCascade[id.xy];
+    float4 upperRadiance = _UpperCascade[upperCoords];
     upperRadiance += _UpperCascade[upperCoords + int2(1, 0)];
     upperRadiance += _UpperCascade[upperCoords + int2(0, 1)];
     upperRadiance += _UpperCascade[upperCoords + int2(1, 1)];

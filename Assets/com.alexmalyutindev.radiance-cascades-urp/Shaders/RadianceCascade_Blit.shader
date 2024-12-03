@@ -172,6 +172,8 @@ Shader "Hidden/RadianceCascade/Blit"
                 //     clip(-1);
                 // }
 
+                // return SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, input.texcoord);
+
                 const float2 sizedSize = _BlitTexture_TexelSize.zw * float2(3, 2);
                 const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw * 0.5f;
                 const float2 w = fmod(temp, 1.0f);
@@ -184,7 +186,7 @@ Shader "Hidden/RadianceCascade/Blit"
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.0f, 0.5f));
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.3333f, 0.5f));
                 test += SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, uv + float2(0.6666f, 0.5f));
-                return half4(test.rgb, 1);
+                return half4(test.rgb * 0.1666, 1);
                 return half4(uv, 0, 1);
 
                 // float2 uv = (coord + 1.0f) * _BlitTexture_TexelSize.xy;
