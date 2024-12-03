@@ -122,9 +122,30 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     _OutCascade[coords] = color;
 }
 
+
+/////////////
+/// MERGE ///
+/////////////
+
 float _LowerCascadeLevel;
 Texture2D _UpperCascade;
 RWTexture2D<float4> _LowerCascade;
+
+static const int Cascade0Size = 1;
+
+float4 AverageAngles(int2 topLeft)
+{
+    //       * | *
+    // * => ---+---
+    //       * | *
+    float4 radiance = _UpperCascade[topLeft];
+    radiance += _UpperCascade[topLeft + int2(1, 0)];
+    radiance += _UpperCascade[topLeft + int2(0, 1)];
+    radiance += _UpperCascade[topLeft + int2(1, 1)];
+    radiance *= 0.25f;
+
+    return radiance;
+}
 
 [numthreads(8,8,1)]
 void MergeCascade(uint3 id : SV_DispatchThreadID)
@@ -135,14 +156,34 @@ void MergeCascade(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    int2 upperCoords = floor(coords * 0.125f) * 8;
+
+    // Calculating dimensions
+    int lowerCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel);
+    int upperCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel + 1);
+
+    int2 upperCoords = floor(coords / upperCascadeDim) * upperCascadeDim; // TODO: !!!
     float4 radiance = _LowerCascade[coords]; // Radiance from lower cascade
 
-    float4 upperRadiance = _UpperCascade[upperCoords];
-    upperRadiance += _UpperCascade[upperCoords + int2(1, 0)];
-    upperRadiance += _UpperCascade[upperCoords + int2(0, 1)];
-    upperRadiance += _UpperCascade[upperCoords + int2(1, 1)];
-    upperRadiance *= 0.25f;
+    //Calculate the position of the center of the lower probe
+    int2 lowerCascadeIndex = floor(coords / lowerCascadeDim);
+    int2 lowerCascadeCenterPos = lowerCascadeIndex * lowerCascadeDim + (lowerCascadeDim / 2);
+
+    int2 upperCascadeIndex = floor((lowerCascadeIndex - 0.5) / 2.0);
+    int2 upperCascadeOriginPos = upperCascadeIndex * upperCascadeDim;
+    int2 upperCascadeCenterPos = upperCascadeOriginPos + upperCascadeDim * 0.5f;
+
+
+    float4 a = AverageAngles(upperCoords);
+    float4 b = AverageAngles(upperCoords + int2(upperCascadeDim, 0));
+    float4 c = AverageAngles(upperCoords + int2(0, upperCascadeDim));
+    float4 d = AverageAngles(upperCoords + int2(upperCascadeDim, upperCascadeDim));
+
+
+    float2 weight = (lowerCascadeCenterPos - upperCascadeCenterPos) / float(upperCascadeDim);
+    float4 m0 = lerp(a, b, weight.x);
+    float4 m1 = lerp(c, d, weight.x);
+
+    float4 upperRadiance = lerp(m0, m1, weight.y);
 
     radiance.rgb += upperRadiance.rgb * radiance.a;
     radiance.a *= upperRadiance.a;

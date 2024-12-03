@@ -112,7 +112,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
-            if (false)
+            if (true)
             {
                 Cascades3d(ref renderingData, cmd, colorTexture);
             }
