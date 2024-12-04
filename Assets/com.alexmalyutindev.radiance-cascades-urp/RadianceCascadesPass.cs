@@ -1,7 +1,6 @@
 using AlexMalyutinDev.RadianceCascades;
 using InternalBridge;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -48,7 +47,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
         _blit = blit;
         _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
-        ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
+        // ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
     }
 
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
@@ -113,8 +112,10 @@ public class RadianceCascadesPass : ScriptableRenderPass
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
+            // TODO: Make 8 way probes cascade! 
             if (true)
             {
+                // NOTE: 6 way probe
                 Cascades3d(ref renderingData, cmd, colorTexture);
             }
             else

@@ -95,7 +95,8 @@ inline half3x3 OrthogonalBasis(in half3 normal)
 // _\/_
 //  /\
 
-static const half3x3 Basis2[] =
+
+static const half3x3 BasisX[] =
 {
     // half3x3(
     //     normalize(half3(-1.0h, 1.0h, -1.0h)),
@@ -103,13 +104,48 @@ static const half3x3 Basis2[] =
     //     normalize(half3(1.0h, 1.0h, 1.0h))
     // ),
 
-    OrthogonalBasis(half3(1, 1, 1)),
-    OrthogonalBasis(half3(1, 1, -1)),
-    OrthogonalBasis(half3(1, -1, 1)),
-    OrthogonalBasis(half3(-1, 1, 1)),
-    OrthogonalBasis(half3(1, -1, -1)),
-    OrthogonalBasis(half3(-1, 1, -1)),
-    OrthogonalBasis(half3(-1, -1, -1)),
+    OrthogonalBasis(half3(1.0h, 1.0h, 0.0h)),
+    OrthogonalBasis(half3(-1.0h, -1.0h, 0.0h)),
+
+    OrthogonalBasis(half3(-1.0h, 1.0h, 0.0h)),
+    OrthogonalBasis(half3(1.0h, -1.0h, 0.0h)),
+
+    OrthogonalBasis(half3(0.0h, 0.0h, 1.0h)),
+    OrthogonalBasis(half3(0.0h, 0.0h, -1.0h)),
+};
+
+// NOTE: Base direction to reconstruct 5 others
+static const half3x3 Basis0 = OrthogonalBasis(half3(1.0h, 1.0h, 0.0h));
+static const half3x3 BasisXX[] =
+{
+    Basis0,
+    half3x3(
+        -Basis0[0],
+        Basis0[1],
+        -Basis0[2]
+    ),
+
+    half3x3(
+        Basis0[0],
+        -Basis0[1],
+        -Basis0[2]
+    ),
+    half3x3(
+        Basis0[0],
+        -Basis0[2],
+        Basis0[1]
+    ),
+
+    half3x3(
+        Basis0[2],
+        Basis0[1],
+        -Basis0[0]
+    ),
+    half3x3(
+        Basis0[2],
+        -Basis0[1],
+        Basis0[0]
+    ),
 };
 
 float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
@@ -119,7 +155,7 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
 
     float3 directionCS = normalize(mul((float3x3)_ViewProjection, directionWS));
     directionCS /= Max3(directionCS.x, directionCS.y, directionCS.z);
-    directionCS *= _ColorTexture_TexelSize.z;
+    directionCS *= _ColorTexture_TexelSize.w;
 
     float3 ray;
     for (int i = range.x; i < range.y; i++)
@@ -164,7 +200,7 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
 
     directionWS.xy += indexInProbe / (_ProbeSize - 1.0f) - 0.5;
 
-    directionWS = mul(Basis2[probeSide], normalize(directionWS));
+    directionWS = mul(BasisXX[probeSide], normalize(directionWS));
 
     // _OutCascade[coords] = float4(direction, 1);
     // return;
@@ -228,7 +264,8 @@ void MergeCascade(uint3 id : SV_DispatchThreadID)
     int lowerCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel);
     int upperCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel + 1);
 
-    int2 upperCoords = floor(coords / upperCascadeDim) * upperCascadeDim; // TODO: !!!
+    // BUG: !!!
+    int2 upperCoords = floor(coords / upperCascadeDim * 0.5f) * upperCascadeDim * 2;
     float4 radiance = _LowerCascade[coords]; // Radiance from lower cascade
 
     //Calculate the position of the center of the lower probe
@@ -243,6 +280,8 @@ void MergeCascade(uint3 id : SV_DispatchThreadID)
     // BUG: Wrong coords, should offset by angle!
     // _LowerCascade[coords] = float4(upperCoords + fmod(coords, Cascade0Size), 0, 1);
     // return;
+
+    upperCoords += fmod(coords, lowerCascadeDim) * 2;
 
     float4 a = AverageAngles(upperCoords);
     float4 b = AverageAngles(upperCoords + int2(upperCascadeDim, 0));

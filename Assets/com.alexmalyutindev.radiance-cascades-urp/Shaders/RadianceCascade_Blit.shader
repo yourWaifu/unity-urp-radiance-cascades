@@ -199,7 +199,7 @@ Shader "Hidden/RadianceCascade/Blit"
                 return radiance;
             }
 
-            float4 SamlpeProbe2(int2 coords)
+            float4 SamlpeSampleProbe(int2 coords)
             {
                 float4 radiance = 0;
 
@@ -210,6 +210,21 @@ Shader "Hidden/RadianceCascade/Blit"
                 radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(0, 1));
                 radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 1));
                 radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 1));
+
+                return radiance;
+            }
+
+            float4 SamlpeSampleProbe2x2(float2 uv)
+            {
+                float4 radiance = 0;
+
+                float2 offset = 1.0f / float2(3, 2);
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(1, 0));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(2, 0));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(0, 1));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(1, 1));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(2, 1));
 
                 return radiance;
             }
@@ -226,29 +241,28 @@ Shader "Hidden/RadianceCascade/Blit"
 
                 // return SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, input.texcoord);
 
-                const float2 sizedSize = _BlitTexture_TexelSize.zw * float2(3, 2);
-                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw * 0.5f;
+                const int2 sideSize = _BlitTexture_TexelSize.zw / int2(3, 2);
+                //  0 | 0 | 1 | 1 
+                // ___|___|___|___
+                //  0 | 0 | 1 | 1 
+                // ___|___|___|___
+                //  2 | 2 | 3 | 3 
+                //    |   |   |   
+                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw * 0.25f;
                 const float2 w = fmod(temp, 1.0f);
-                const int2 coord = floor(temp) * 2.0f;
-
-                float2 uv = fmod(input.texcoord / float2(3, 2), 1.0f);
 
                 half3 normalWS = SampleSceneNormals(input.texcoord);
-                // float4 test = SamlpeProbe(uv, normalWS);
 
-                int2 coords = floor((input.texcoord * _BlitTexture_TexelSize.zw) / int2(3, 2) * 0.5) * 2;
-                float4 test = SamlpeProbe2(coords);
-                test += SamlpeProbe2(coords + int2(1, 0));
-                test += SamlpeProbe2(coords + int2(0, 1));
-                test += SamlpeProbe2(coords + int2(1, 1));
-                return half4(test.rgb * 0.25, 1);
+                int2 probeIndex = floor(sideSize * input.texcoord * 0.5f) * 2;
+                // half4 a = SamlpeSampleProbe(probeIndex);
+                // half4 b = SamlpeSampleProbe(probeIndex + int2(1, 0));
+                // half4 c = SamlpeSampleProbe(probeIndex + int2(0, 1));
+                // half4 d = SamlpeSampleProbe(probeIndex + int2(1, 1));
 
-                // float2 uv = (coord + 1.0f) * _BlitTexture_TexelSize.xy;
-                float3 offset = float3(_BlitTexture_TexelSize.xy * 2.0f, 0.0f);
-                half4 a = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv) * 4;
-                half4 b = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xz) * 4;
-                half4 c = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.zy) * 4;
-                half4 d = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy) * 4;
+                half4 a = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
+                half4 b = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
+                half4 c = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
+                half4 d = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
 
                 // Bilinear Interpolation.
                 half4 color = lerp(

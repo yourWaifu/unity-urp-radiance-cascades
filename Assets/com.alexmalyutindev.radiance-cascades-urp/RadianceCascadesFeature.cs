@@ -17,7 +17,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     {
         _pass = new RadianceCascadesPass(RadianceCascades, RadianceCascades3d, BlitMaterial)
         {
-            renderPassEvent = RenderPassEvent.AfterRenderingSkybox
+            renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
     }
 
