@@ -187,14 +187,31 @@ Shader "Hidden/RadianceCascade/Blit"
                 // return (x + z + y) * 0.5f;
 
 
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.5f));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f));
+                int2 offset = _BlitTexture_TexelSize.zw / int2(3, 2);
+                int2 coords = floor(uv * _BlitTexture_TexelSize.zw);
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords);
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 0));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 0));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(0, 1));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 1));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 1));
 
-                return radiance * 0.5f;
+                return radiance;
+            }
+
+            float4 SamlpeProbe2(int2 coords)
+            {
+                float4 radiance = 0;
+
+                int2 offset = _BlitTexture_TexelSize.zw / int2(3, 2);
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords);
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 0));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 0));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(0, 1));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 1));
+                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 1));
+
+                return radiance;
             }
 
             half4 Fragment(Varyings input) : SV_TARGET
@@ -217,8 +234,14 @@ Shader "Hidden/RadianceCascade/Blit"
                 float2 uv = fmod(input.texcoord / float2(3, 2), 1.0f);
 
                 half3 normalWS = SampleSceneNormals(input.texcoord);
-                float4 test = SamlpeProbe(uv, normalWS);
-                return half4(test.rgb, 1);
+                // float4 test = SamlpeProbe(uv, normalWS);
+
+                int2 coords = floor((input.texcoord * _BlitTexture_TexelSize.zw) / int2(3, 2) * 0.5) * 2;
+                float4 test = SamlpeProbe2(coords);
+                test += SamlpeProbe2(coords + int2(1, 0));
+                test += SamlpeProbe2(coords + int2(0, 1));
+                test += SamlpeProbe2(coords + int2(1, 1));
+                return half4(test.rgb * 0.25, 1);
 
                 // float2 uv = (coord + 1.0f) * _BlitTexture_TexelSize.xy;
                 float3 offset = float3(_BlitTexture_TexelSize.xy * 2.0f, 0.0f);

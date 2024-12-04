@@ -141,7 +141,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
                     ref renderingData,
                     colorTexture,
                     renderingData.cameraData.renderer.cameraDepthTargetHandle,
-                    1 << level,
+                    2 << level,
                     level,
                     _Cascades3d[level]
                 );
