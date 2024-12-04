@@ -163,35 +163,38 @@ Shader "Hidden/RadianceCascade/Blit"
 
             float4 SamlpeProbe(float2 uv, half3 normalWS)
             {
-                float3 weight = normalWS * 0.5h + 0.5h;
-                // TODO: Use normal map for detailed lighting!
                 float4 radiance = 0;
-                float4 x = lerp(
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv),
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f)),
-                    weight.x
-                );
 
-                float4 y = lerp(
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f)),
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
-                    weight.y
-                );
+                // TODO: Use normal map for detailed lighting!
+                // float3 weight = normalWS * 0.5h + 0.5h;
+                // float4 x = lerp(
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv),
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f)),
+                //     weight.x
+                // );
+                //
+                // float4 y = lerp(
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f)),
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
+                //     weight.y
+                // );
+                //
+                // float4 z = lerp(
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
+                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f)),
+                //     weight.z
+                // );
+                // return (x + z + y) * 0.5f;
 
-                float4 z = lerp(
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
-                    SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f)),
-                    weight.z
-                );
 
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f));
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f));
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f));
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.5f));
-                // radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.5f));
+                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f));
 
-                return (x + z + y) * 0.333f;
+                return radiance * 0.5f;
             }
 
             half4 Fragment(Varyings input) : SV_TARGET
