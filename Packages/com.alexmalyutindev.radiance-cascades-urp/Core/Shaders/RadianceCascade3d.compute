@@ -1,0 +1,259 @@
+#pragma kernel RenderCascade
+#pragma kernel MergeCascade
+
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+#include "Common.hlsl"
+
+// Layout:
+// .______________.
+// | +X | +Y | +Z |
+// |____|____|____|
+// | -X | -Y | -Z |
+// |____|____|____|
+RWTexture2D<float4> _OutCascade;
+int2 _ProbesCount;
+
+half _ProbeSize;
+half _CascadeLevel;
+float4x4 _View;
+float4x4 _ViewProjection;
+float4x4 _InvViewProjection;
+
+static const float3 Axes[6] =
+{
+    float3(1.0f, 0.0f, 0.0f),
+    float3(0.0f, 1.0f, 0.0f),
+    float3(0.0f, 0.0f, 1.0f),
+    float3(-1.0f, 0.0f, 0.0f),
+    float3(0.0f, -1.0f, 0.0f),
+    float3(0.0f, 0.0f, -1.0f),
+};
+
+static const half3x3 BasisAA[6] =
+{
+    // +X
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        0.0h, 1.0h, 0.0h,
+        1.0h, 0.0h, 0.0h
+    ),
+    // -X
+    half3x3(
+        0.0h, 0.0h, 1.0h,
+        0.0h, 1.0h, 0.0h,
+        -1.0h, 0.0h, 0.0h
+    ),
+    // +Y
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h
+    ),
+    // -Y
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        1.0h, 0.0h, 0.0h,
+        0.0h, -1.0h, 0.0h
+    ),
+    // +Z
+    half3x3(
+        1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h,
+        0.0h, 0.0h, 1.0h
+    ),
+    // -Z
+    half3x3(
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h,
+        0.0h, 0.0h, -1.0h
+    ),
+};
+
+
+void OrthogonalBasis(in half3 normal, out half3 tangent, out half3 bitangent)
+{
+    float sign = normal.z > 0.0f ? 1.0f : -1.0f;
+    const float a = -1.0f / (sign + normal.z);
+    const float b = normal.x * normal.y * a;
+    tangent = half3(1.0f + sign * normal.x * normal.x * a, sign * b, -sign * normal.x);
+    bitangent = half3(b, sign + normal.y * normal.y * a, -normal.y);
+}
+
+inline half3x3 OrthogonalBasis(in half3 normal)
+{
+    normal = normalize(normal);
+    half3 tangent, bitangent;
+    OrthogonalBasis(normal, tangent, bitangent);
+    return half3x3(
+        tangent,
+        bitangent,
+        normal
+    );
+}
+
+// NOTE: Base direction to reconstruct 5 others
+static const half3x3 Basis0 = OrthogonalBasis(half3(1.0h, 1.0h, 0.0h));
+static const half3x3 BasisXX[] =
+{
+    Basis0,
+    half3x3(
+        -Basis0[0],
+        Basis0[1],
+        -Basis0[2]
+    ),
+
+    half3x3(
+        Basis0[0],
+        -Basis0[1],
+        -Basis0[2]
+    ),
+    half3x3(
+        Basis0[0],
+        -Basis0[2],
+        Basis0[1]
+    ),
+
+    half3x3(
+        Basis0[2],
+        Basis0[1],
+        -Basis0[0]
+    ),
+    half3x3(
+        Basis0[2],
+        -Basis0[1],
+        Basis0[0]
+    ),
+};
+
+float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
+{
+    float4 originCS = mul(_ViewProjection, float4(originWS, 1));
+    originCS.xyz /= originCS.w;
+
+    float3 directionCS = normalize(mul((float3x3)_ViewProjection, directionWS));
+    directionCS *= _ColorTexture_TexelSize.w * 2;
+
+    float3 ray;
+    for (int i = range.x; i < range.y; i++)
+    {
+        ray = originCS.xyz + directionCS * i;
+
+        if (any(ray < 0 || 1 < ray)) break;
+
+        // TODO: Sample in int2 coords, to skip same depth values
+        float depth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, ray.xy, 0);
+        if (depth > ray.z)
+        {
+            float4 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_LinearClamp, ray.xy, 0);
+            color.a = 0.0f;
+            return color;
+        }
+    }
+
+    return float4(0, 0, 0, 1);
+}
+
+[numthreads(8,8,1)]
+void RenderCascade(uint3 id : SV_DispatchThreadID)
+{
+    uint2 coords = id.xy;
+    if (any(coords > _CascadeBufferSize.xy))
+    {
+        return;
+    }
+
+    float2 sideSize = _CascadeBufferSize.xy / float2(2, 3);
+    float2 sideSizeRcp = float2(2, 3) * _CascadeBufferSize.zw;
+
+    float2 probeCenterUV = (floor(fmod(coords, sideSize) / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) * sideSizeRcp;
+
+    int probeSide = dot(floor(coords / sideSize), float2(1.0f, 2.0f));
+    float2 indexInProbe = floor(fmod(coords, _ProbeSize));
+
+    float3 directionWS = float3(0.0h, 0.0h, 2.0f);
+    directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
+    directionWS = normalize(directionWS);
+    directionWS = mul(BasisAA[probeSide], directionWS);
+
+    float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
+    float3 positionWS = ComputeWorldSpacePosition(float4(probeCenterUV, sceneDepth, 1), _InvViewProjection);
+
+    float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
+    positionWS += viewDirectionWS * 0.01f;
+
+    int2 cascadeRange = CalculateRange(_CascadeLevel);
+
+    // TODO: Don't transform CS->WS->CS, just use CS right away.
+    _OutCascade[coords] = RayTrace(positionWS, directionWS, cascadeRange);
+}
+
+
+/////////////
+/// MERGE ///
+/////////////
+
+float _LowerCascadeLevel;
+Texture2D _UpperCascade;
+RWTexture2D<float4> _LowerCascade;
+
+static const int Cascade0Size = 2;
+
+float4 AverageAngles(int2 topLeft)
+{
+    //       * | *
+    // * => ---+---
+    //       * | *
+    float4 radiance = _UpperCascade[topLeft];
+    radiance += _UpperCascade[topLeft + int2(1, 0)];
+    radiance += _UpperCascade[topLeft + int2(0, 1)];
+    radiance += _UpperCascade[topLeft + int2(1, 1)];
+    radiance *= 0.25f;
+
+    return radiance;
+}
+
+[numthreads(8,8,1)]
+void MergeCascade(uint3 id : SV_DispatchThreadID)
+{
+    int2 coords = id.xy;
+    if (any(coords > _CascadeBufferSize.xy))
+    {
+        return;
+    }
+
+    // Calculating dimensions
+    int lowerCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel);
+    int upperCascadeDim = Cascade0Size * pow(2, _LowerCascadeLevel + 1);
+
+    // BUG: !!!
+    int2 upperCoords = floor(coords / upperCascadeDim * 0.5f) * upperCascadeDim * 2;
+    float4 radiance = _LowerCascade[coords]; // Radiance from lower cascade
+
+    //Calculate the position of the center of the lower probe
+    int2 lowerCascadeIndex = floor(coords / lowerCascadeDim);
+    int2 lowerCascadeCenterPos = lowerCascadeIndex * lowerCascadeDim + (lowerCascadeDim / 2);
+
+    int2 upperCascadeIndex = floor((lowerCascadeIndex - 0.5) / 2.0);
+    int2 upperCascadeOriginPos = upperCascadeIndex * upperCascadeDim;
+    int2 upperCascadeCenterPos = upperCascadeOriginPos + upperCascadeDim * 0.5f;
+
+
+    // BUG: Wrong coords, should offset by angle!
+    upperCoords += fmod(coords, lowerCascadeDim) * 2;
+
+    float4 a = AverageAngles(upperCoords);
+    float4 b = AverageAngles(upperCoords + int2(upperCascadeDim, 0));
+    float4 c = AverageAngles(upperCoords + int2(0, upperCascadeDim));
+    float4 d = AverageAngles(upperCoords + int2(upperCascadeDim, upperCascadeDim));
+
+    // Bilinear interpolation.  
+    float2 weight = (lowerCascadeCenterPos - upperCascadeCenterPos) / float(upperCascadeDim);
+    float4 m0 = lerp(a, b, weight.x);
+    float4 m1 = lerp(c, d, weight.x);
+    float4 upperRadiance = lerp(m0, m1, weight.y);
+
+    radiance.rgb += upperRadiance.rgb * radiance.a;
+    radiance.a *= upperRadiance.a;
+
+    _LowerCascade[id.xy] = radiance;
+}

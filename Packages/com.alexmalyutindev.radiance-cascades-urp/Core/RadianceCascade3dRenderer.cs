@@ -4,13 +4,13 @@ using UnityEngine.Rendering.Universal;
 
 namespace AlexMalyutinDev.RadianceCascades
 {
-    public class RadianceCascade3dCompute
+    public class RadianceCascade3dRenderer
     {
         private readonly ComputeShader _compute;
         private readonly int _renderKernel;
         private readonly int _mergeKernel;
 
-        public RadianceCascade3dCompute(ComputeShader compute)
+        public RadianceCascade3dRenderer(ComputeShader compute)
         {
             _compute = compute;
             _renderKernel = _compute.FindKernel("RenderCascade");
@@ -30,28 +30,31 @@ namespace AlexMalyutinDev.RadianceCascades
             var rt = target.rt;
             var depthRT = depth.rt;
 
-            cmd.SetComputeFloatParam(_compute, "_ProbeSize", probeSize);
-            cmd.SetComputeFloatParam(_compute, "_CascadeLevel", cascadeLevel);
+            cmd.SetComputeFloatParam(_compute, ShaderIds.ProbeSize, probeSize);
+            cmd.SetComputeFloatParam(_compute, ShaderIds.CascadeLevel, cascadeLevel);
             var cascadeSize = new Vector4(rt.width, rt.height, 1.0f / rt.width, 1.0f / rt.height);
-            cmd.SetComputeVectorParam(_compute, "_CascadeBufferSize", cascadeSize);
+            cmd.SetComputeVectorParam(_compute, ShaderIds.CascadeBufferSize, cascadeSize);
 
 
             var view = renderingData.cameraData.GetViewMatrix();
-            var proj = renderingData.cameraData.GetProjectionMatrix();
-            
-            cmd.SetComputeMatrixParam(_compute, "_ViewProjection", proj * view);
+            var proj = renderingData.cameraData.GetGPUProjectionMatrix();
+
+            var viewProj = proj * view;
+            cmd.SetComputeMatrixParam(_compute, ShaderIds.View, view);
+            cmd.SetComputeMatrixParam(_compute, ShaderIds.ViewProjection, viewProj);
+            cmd.SetComputeMatrixParam(_compute, ShaderIds.InvViewProjection, view.inverse * proj.inverse);
 
             cmd.SetComputeVectorParam(
                 _compute,
-                "_ColorTexture_TexelSize",
+                ShaderIds.ColorTextureTexelSize,
                 new Vector4(depthRT.width, depthRT.height, 1.0f / depthRT.width, 1.0f / depthRT.height)
             );
 
-            cmd.SetComputeTextureParam(_compute, _renderKernel, "_ColorTexture", color);
-            cmd.SetComputeTextureParam(_compute, _renderKernel, "_DepthTexture", depth);
+            cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.ColorTexture, color);
+            cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.DepthTexture, depth);
 
             // Output
-            cmd.SetComputeTextureParam(_compute, _renderKernel, "_OutCascade", target);
+            cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.OutCascade, target);
             cmd.DispatchCompute(
                 _compute,
                 _renderKernel,
@@ -71,7 +74,7 @@ namespace AlexMalyutinDev.RadianceCascades
             var rt = lower.rt;
 
             var cascadeSize = new Vector4(rt.width, rt.height, 1.0f / rt.width, 1.0f / rt.height);
-            cmd.SetComputeVectorParam(_compute, "_CascadeBufferSize", cascadeSize);
+            cmd.SetComputeVectorParam(_compute, ShaderIds.CascadeBufferSize, cascadeSize);
 
             cmd.SetComputeFloatParam(_compute, "_LowerCascadeLevel", lowerCascadeLevel);
 
