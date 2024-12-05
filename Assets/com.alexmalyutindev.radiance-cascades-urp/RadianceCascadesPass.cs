@@ -76,10 +76,13 @@ public class RadianceCascadesPass : ScriptableRenderPass
             );
         }
 
-        const int scale = 1;
-        var decs2 = new RenderTextureDescriptor(64 * 2 * scale, 32 * 3 * scale)
+        const int scale = 4;
+        var decs2 = new RenderTextureDescriptor(
+            (2 << CascadesCount) * 2 * scale,
+            (1 << CascadesCount) * 3 * scale
+        )
         {
-            colorFormat = RenderTextureFormat.ARGBHalf,
+            colorFormat = RenderTextureFormat.ARGB2101010,
             enableRandomWrite = true,
         };
         for (int i = 0; i < _Cascades3d.Length; i++)

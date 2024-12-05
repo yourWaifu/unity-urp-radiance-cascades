@@ -131,7 +131,7 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
     originCS.xyz /= originCS.w;
 
     float3 directionCS = normalize(mul((float3x3)_ViewProjection, directionWS));
-    directionCS *= _ColorTexture_TexelSize.w;
+    directionCS *= _ColorTexture_TexelSize.w * 2;
 
     float3 ray;
     for (int i = range.x; i < range.y; i++)
@@ -140,6 +140,7 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
 
         if (any(ray < 0 || 1 < ray)) break;
 
+        // TODO: Sample in int2 coords, to skip same depth values
         float depth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, ray.xy, 0);
         if (depth > ray.z)
         {
@@ -169,8 +170,8 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     int probeSide = dot(floor(coords / sideSize), float2(1.0f, 2.0f));
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
-    float3 directionWS = float3(0.0h, 0.0h, 0.8f);
-    directionWS.xy = indexInProbe / (_ProbeSize - 1.0h) - 0.5h;
+    float3 directionWS = float3(0.0h, 0.0h, 2.0f);
+    directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
     directionWS = normalize(directionWS);
     directionWS = mul(BasisAA[probeSide], directionWS);
 
@@ -238,9 +239,6 @@ void MergeCascade(uint3 id : SV_DispatchThreadID)
 
 
     // BUG: Wrong coords, should offset by angle!
-    // _LowerCascade[coords] = float4(upperCoords + fmod(coords, Cascade0Size), 0, 1);
-    // return;
-
     upperCoords += fmod(coords, lowerCascadeDim) * 2;
 
     float4 a = AverageAngles(upperCoords);

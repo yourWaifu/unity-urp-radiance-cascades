@@ -173,7 +173,7 @@ Shader "Hidden/RadianceCascade/Blit"
                 float4 y = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uvY, 0);
                 float4 z = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uvZ, 0);
 
-                return x + y + z;
+                // return x + y + z;
 
                 half3 weight = abs(normalWS);
                 weight /= dot(weight, 1.0h);
@@ -187,30 +187,14 @@ Shader "Hidden/RadianceCascade/Blit"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                // half depth = SAMPLE_TEXTURE2D(_CameraDepthTexture, sampler_PointClamp, input.texcoord).x;
-                // if (depth == UNITY_RAW_FAR_CLIP_VALUE)
-                // {
-                //     clip(-1);
-                // }
-
-                // return SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, input.texcoord);
-
                 const float2 sideSize = floor(_BlitTexture_TexelSize.zw / float2(2, 3));
-                //  0 | 0 | 1 | 1 
-                // ___|___|___|___
-                //  0 | 0 | 1 | 1 
-                // ___|___|___|___
-                //  2 | 2 | 3 | 3 
-                //    |   |   |   
-                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw / 4.0f;
-                const float2 w = fmod(temp, 1.0f);
-
-                // return half4(w, 0, 1);
+                const float probe0Size = 2.0f;
+                const float2 probeIndex = input.texcoord * sideSize / probe0Size;
+                const float2 w = fmod(probeIndex, 1.0f);
 
                 half3 normalWS = normalize(SampleSceneNormals(input.texcoord));
 
-                const float probe0Size = 2.0f;
-                float2 coords = floor(input.texcoord * sideSize / probe0Size) * probe0Size;
+                float2 coords = floor(probeIndex) * probe0Size;
                 float2 uv = (coords + 1.0f) * _BlitTexture_TexelSize.xy;
 
                 float3 offset = float3(_BlitTexture_TexelSize.xy * probe0Size, 0.0f);
