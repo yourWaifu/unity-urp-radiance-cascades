@@ -1,0 +1,10 @@
+{
+  "name": "com.alexmalyutindev.radiance-cascades-urp",
+  "displayName": "Radiance Cascades URP",
+  "version": "0.0.1",
+  "description": "TODO:",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "14.0.10"
+  }
+}

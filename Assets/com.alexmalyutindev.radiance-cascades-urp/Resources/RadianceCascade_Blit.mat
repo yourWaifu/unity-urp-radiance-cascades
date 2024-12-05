@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: BlitMatrial
+  m_Name: RadianceCascade_Blit
   m_Shader: {fileID: 4800000, guid: a2ccfe01cd5d4f26b4f33784559de2f9, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0

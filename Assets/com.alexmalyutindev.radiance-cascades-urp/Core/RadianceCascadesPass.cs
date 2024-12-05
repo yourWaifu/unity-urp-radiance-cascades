@@ -12,13 +12,9 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private RTHandle[] _Cascades = new RTHandle[CascadesCount];
     private static readonly string[] _cascadeNames = GenNames("_Cascade", CascadesCount);
 
-    private RTHandle[] _Cascades3d = new RTHandle[CascadesCount];
-    private static readonly string[] _cascade3dNames = GenNames("_Cascade3d", CascadesCount);
-
     private readonly Material _blit;
     private readonly ComputeShader _radianceCascadesCs;
     private readonly RadianceCascadeCompute _compute;
-    private readonly RadianceCascade3dCompute _compute3d;
     private readonly int _renderCascadeKernel;
 
 
@@ -43,7 +39,6 @@ public class RadianceCascadesPass : ScriptableRenderPass
         _radianceCascadesCs = radianceCascadesCs;
 
         _compute = new RadianceCascadeCompute(_radianceCascadesCs);
-        _compute3d = new RadianceCascade3dCompute(radianceCascades3d);
 
         _blit = blit;
         _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
@@ -75,26 +70,6 @@ public class RadianceCascadesPass : ScriptableRenderPass
                 name: _cascadeNames[i]
             );
         }
-
-        const int scale = 4;
-        var decs2 = new RenderTextureDescriptor(
-            (2 << CascadesCount) * 2 * scale,
-            (1 << CascadesCount) * 3 * scale
-        )
-        {
-            colorFormat = RenderTextureFormat.ARGB2101010,
-            enableRandomWrite = true,
-        };
-        for (int i = 0; i < _Cascades3d.Length; i++)
-        {
-            RenderingUtils.ReAllocateIfNeeded(
-                ref _Cascades3d[i],
-                decs2,
-                name: _cascade3dNames[i],
-                filterMode: FilterMode.Point,
-                wrapMode: TextureWrapMode.Clamp
-            );
-        }
     }
 
     public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
@@ -114,70 +89,13 @@ public class RadianceCascadesPass : ScriptableRenderPass
         {
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
-
-            // TODO: Make 8 way probes cascade! 
-            if (true)
-            {
-                // NOTE: 6 way probe
-                Cascades3d(ref renderingData, cmd, colorTexture);
-            }
-            else
-            {
-                Cascades2d(renderingData, cmd, colorTexture, depthTexture);
-            }
+            Cascades2d(renderingData, cmd, colorTexture, depthTexture);
         }
 
         context.ExecuteCommandBuffer(cmd);
         cmd.Clear();
 
         CommandBufferPool.Release(cmd);
-    }
-
-    private void Cascades3d(ref RenderingData renderingData, CommandBuffer cmd, RTHandle colorTexture)
-    {
-        var sampleKey = "RenderCascades3D";
-        cmd.BeginSample(sampleKey);
-        {
-            for (int level = 0; level < _Cascades.Length; level++)
-            {
-                _compute3d.RenderCascade(
-                    cmd,
-                    ref renderingData,
-                    colorTexture,
-                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
-                    2 << level,
-                    level,
-                    _Cascades3d[level]
-                );
-            }
-        }
-        cmd.EndSample(sampleKey);
-
-        PreviewCascades(cmd, _Cascades3d);
-
-        sampleKey = "MergeCascades3D";
-        cmd.BeginSample(sampleKey);
-        {
-            for (int level = _Cascades.Length - 1; level > 0; level--)
-            {
-                _compute3d.MergeCascades(
-                    cmd,
-                    _Cascades3d[level - 1],
-                    _Cascades3d[level],
-                    level - 1
-                );
-            }
-        }
-        cmd.EndSample(sampleKey);
-
-
-        sampleKey = "Combine";
-        cmd.BeginSample(sampleKey);
-        Blitter.BlitTexture(cmd, _Cascades3d[0], new Vector4(1f / 3f, 1f / 2f, 0, 0), _blit, 1);
-        cmd.EndSample(sampleKey);
-
-
-        PreviewCascades(cmd, _Cascades3d, 1.0f);
     }
 
     private void Cascades2d(
