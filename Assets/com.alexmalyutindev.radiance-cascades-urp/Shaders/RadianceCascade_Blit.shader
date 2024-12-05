@@ -161,72 +161,26 @@ Shader "Hidden/RadianceCascade/Blit"
                 return output;
             }
 
-            float4 SamlpeProbe(float2 uv, half3 normalWS)
+            float4 SamlpeSampleProbe2x2(float2 uv, half3 normalWS)
             {
-                float4 radiance = 0;
+                float2 sideOffset = 1.0f / float2(2.0f, 3.0f);
 
-                // TODO: Use normal map for detailed lighting!
-                // float3 weight = normalWS * 0.5h + 0.5h;
-                // float4 x = lerp(
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv),
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(0.0f, 0.5f)),
-                //     weight.x
-                // );
-                //
-                // float4 y = lerp(
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(1.0f / 3.0f, 0.0f)),
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
-                //     weight.y
-                // );
-                //
-                // float4 z = lerp(
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.0f)),
-                //     SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + float2(2.0f / 3.0f, 0.5f)),
-                //     weight.z
-                // );
-                // return (x + z + y) * 0.5f;
+                float2 uvX = normalWS.x < 0 ? uv : uv + sideOffset.xy * float2(1, 0);
+                float2 uvY = normalWS.y < 0 ? uv + sideOffset.xy * float2(0, 1) : uv + sideOffset.xy * float2(1, 1);
+                float2 uvZ = normalWS.y < 0 ? uv + sideOffset.xy * float2(0, 2) : uv + sideOffset.xy * float2(1, 2);
 
+                float4 x = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uvX, 0);
+                float4 y = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uvY, 0);
+                float4 z = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uvZ, 0);
 
-                int2 offset = _BlitTexture_TexelSize.zw / int2(3, 2);
-                int2 coords = floor(uv * _BlitTexture_TexelSize.zw);
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords);
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 0));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 0));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(0, 1));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 1));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 1));
+                return x + y + z;
 
-                return radiance;
-            }
-
-            float4 SamlpeSampleProbe(int2 coords)
-            {
-                float4 radiance = 0;
-
-                int2 offset = _BlitTexture_TexelSize.zw / int2(3, 2);
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords);
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 0));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 0));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(0, 1));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(1, 1));
-                radiance += LOAD_TEXTURE2D(_BlitTexture, coords + offset.xy * int2(2, 1));
-
-                return radiance;
-            }
-
-            float4 SamlpeSampleProbe2x2(float2 uv)
-            {
-                float4 radiance = 0;
-
-                float2 offset = 1.0f / float2(3, 2);
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(1, 0));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(2, 0));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(0, 1));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(1, 1));
-                radiance += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + offset.xy * float2(2, 1));
-
-                return radiance;
+                half3 weight = abs(normalWS);
+                weight /= dot(weight, 1.0h);
+                return
+                    x * weight.x +
+                    y * weight.y +
+                    z * weight.z;
             }
 
             half4 Fragment(Varyings input) : SV_TARGET
@@ -241,28 +195,29 @@ Shader "Hidden/RadianceCascade/Blit"
 
                 // return SAMPLE_TEXTURE2D(_BlitTexture, sampler_PointClamp, input.texcoord);
 
-                const int2 sideSize = _BlitTexture_TexelSize.zw / int2(3, 2);
+                const float2 sideSize = floor(_BlitTexture_TexelSize.zw / float2(2, 3));
                 //  0 | 0 | 1 | 1 
                 // ___|___|___|___
                 //  0 | 0 | 1 | 1 
                 // ___|___|___|___
                 //  2 | 2 | 3 | 3 
                 //    |   |   |   
-                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw * 0.25f;
+                const float2 temp = input.texcoord * _BlitTexture_TexelSize.zw / 4.0f;
                 const float2 w = fmod(temp, 1.0f);
 
-                half3 normalWS = SampleSceneNormals(input.texcoord);
+                // return half4(w, 0, 1);
 
-                int2 probeIndex = floor(sideSize * input.texcoord * 0.5f) * 2;
-                // half4 a = SamlpeSampleProbe(probeIndex);
-                // half4 b = SamlpeSampleProbe(probeIndex + int2(1, 0));
-                // half4 c = SamlpeSampleProbe(probeIndex + int2(0, 1));
-                // half4 d = SamlpeSampleProbe(probeIndex + int2(1, 1));
+                half3 normalWS = normalize(SampleSceneNormals(input.texcoord));
 
-                half4 a = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
-                half4 b = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
-                half4 c = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
-                half4 d = SamlpeSampleProbe2x2(probeIndex * _BlitTexture_TexelSize.xy);
+                const float probe0Size = 2.0f;
+                float2 coords = floor(input.texcoord * sideSize / probe0Size) * probe0Size;
+                float2 uv = (coords + 1.0f) * _BlitTexture_TexelSize.xy;
+
+                float3 offset = float3(_BlitTexture_TexelSize.xy * probe0Size, 0.0f);
+                half4 a = SamlpeSampleProbe2x2(uv, normalWS);
+                half4 b = SamlpeSampleProbe2x2(uv + offset.xz, normalWS);
+                half4 c = SamlpeSampleProbe2x2(uv + offset.zy, normalWS);
+                half4 d = SamlpeSampleProbe2x2(uv + offset.xy, normalWS);
 
                 // Bilinear Interpolation.
                 half4 color = lerp(
@@ -271,12 +226,8 @@ Shader "Hidden/RadianceCascade/Blit"
                     w.y
                 );
 
-                half4 gbuffer0 = SAMPLE_TEXTURE2D(_GBuffer0, sampler_PointClamp, input.texcoord);
+                half4 gbuffer0 = SAMPLE_TEXTURE2D_LOD(_GBuffer0, sampler_PointClamp, input.texcoord, 0);
                 return color * gbuffer0;
-
-                half angleFade = 1.0h - abs(dot(normalWS, -_CameraForward));
-
-                return color * gbuffer0 * angleFade;
             }
             ENDHLSL
         }

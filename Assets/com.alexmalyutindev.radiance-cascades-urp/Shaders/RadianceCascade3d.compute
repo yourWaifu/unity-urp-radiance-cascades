@@ -13,8 +13,8 @@
 RWTexture2D<float4> _OutCascade;
 int2 _ProbesCount;
 
-float _ProbeSize;
-float _CascadeLevel;
+half _ProbeSize;
+half _CascadeLevel;
 float4x4 _View;
 float4x4 _ViewProjection;
 float4x4 _InvViewProjection;
@@ -29,7 +29,7 @@ static const float3 Axes[6] =
     float3(0.0f, 0.0f, -1.0f),
 };
 
-static const half3x3 Basis[6] =
+static const half3x3 BasisAA[6] =
 {
     // +X
     half3x3(
@@ -37,29 +37,29 @@ static const half3x3 Basis[6] =
         0.0h, 1.0h, 0.0h,
         1.0h, 0.0h, 0.0h
     ),
-    // +Y
-    half3x3(
-        0.0h, 0.0h, -1.0h,
-        -1.0h, 0.0h, 0.0h,
-        0.0h, 1.0h, 0.0h
-    ),
-    // +Z
-    half3x3(
-        1.0h, 0.0h, 0.0h,
-        0.0h, 1.0h, 0.0h,
-        0.0h, 0.0h, 1.0h
-    ),
     // -X
     half3x3(
         0.0h, 0.0h, 1.0h,
         0.0h, 1.0h, 0.0h,
         -1.0h, 0.0h, 0.0h
     ),
+    // +Y
+    half3x3(
+        0.0h, 0.0h, -1.0h,
+        -1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h
+    ),
     // -Y
     half3x3(
-        -1.0h, 0.0h, 0.0h,
         0.0h, 0.0h, -1.0h,
+        1.0h, 0.0h, 0.0h,
         0.0h, -1.0h, 0.0h
+    ),
+    // +Z
+    half3x3(
+        1.0h, 0.0h, 0.0h,
+        0.0h, 1.0h, 0.0h,
+        0.0h, 0.0h, 1.0h
     ),
     // -Z
     half3x3(
@@ -90,29 +90,6 @@ inline half3x3 OrthogonalBasis(in half3 normal)
         normal
     );
 }
-
-// TODO: Rotate basis, to look at diagonals
-// _\/_
-//  /\
-
-
-static const half3x3 BasisX[] =
-{
-    // half3x3(
-    //     normalize(half3(-1.0h, 1.0h, -1.0h)),
-    //     normalize(half3(-1.0h, 0.0h, 1.0h)),
-    //     normalize(half3(1.0h, 1.0h, 1.0h))
-    // ),
-
-    OrthogonalBasis(half3(1.0h, 1.0h, 0.0h)),
-    OrthogonalBasis(half3(-1.0h, -1.0h, 0.0h)),
-
-    OrthogonalBasis(half3(-1.0h, 1.0h, 0.0h)),
-    OrthogonalBasis(half3(1.0h, -1.0h, 0.0h)),
-
-    OrthogonalBasis(half3(0.0h, 0.0h, 1.0h)),
-    OrthogonalBasis(half3(0.0h, 0.0h, -1.0h)),
-};
 
 // NOTE: Base direction to reconstruct 5 others
 static const half3x3 Basis0 = OrthogonalBasis(half3(1.0h, 1.0h, 0.0h));
@@ -154,7 +131,6 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
     originCS.xyz /= originCS.w;
 
     float3 directionCS = normalize(mul((float3x3)_ViewProjection, directionWS));
-    directionCS /= Max3(directionCS.x, directionCS.y, directionCS.z);
     directionCS *= _ColorTexture_TexelSize.w;
 
     float3 ray;
@@ -185,42 +161,26 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    float2 sideSize = _CascadeBufferSize.xy / float2(3, 2);
-    float2 sideSizeRcp = float2(3, 2) * _CascadeBufferSize.zw;
+    float2 sideSize = _CascadeBufferSize.xy / float2(2, 3);
+    float2 sideSizeRcp = float2(2, 3) * _CascadeBufferSize.zw;
 
     float2 probeCenterUV = (floor(fmod(coords, sideSize) / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) * sideSizeRcp;
 
-    int probeSide = dot(floor(coords / sideSize), float2(1, 3));
+    int probeSide = dot(floor(coords / sideSize), float2(1.0f, 2.0f));
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
-    float3 directionWS = float3(0.0f, 0.0f, 1.0f);
-
-    // [1..4] / (4 + 1) => [1/5..4/5] => [2/5-1..8/5-1] = [-3/5..3/5]
-    // directionWS.xy += (indexInProbe + 1) / (_ProbeSize + 1.0f) * 2.0f - 1.0f;
-
-    directionWS.xy += indexInProbe / (_ProbeSize - 1.0f) - 0.5;
-
-    directionWS = mul(BasisXX[probeSide], normalize(directionWS));
-
-    // _OutCascade[coords] = float4(direction, 1);
-    // return;
+    float3 directionWS = float3(0.0h, 0.0h, 0.8f);
+    directionWS.xy = indexInProbe / (_ProbeSize - 1.0h) - 0.5h;
+    directionWS = normalize(directionWS);
+    directionWS = mul(BasisAA[probeSide], directionWS);
 
     float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
     float3 positionWS = ComputeWorldSpacePosition(float4(probeCenterUV, sceneDepth, 1), _InvViewProjection);
 
     float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
-    positionWS += viewDirectionWS * 0.00001f;
+    positionWS += viewDirectionWS * 0.01f;
 
     int2 cascadeRange = CalculateRange(_CascadeLevel);
-
-    // _OutCascade[coords] = float4(indexInProbe / _ProbeSize, 0, 1);
-    // return;
-
-    // float4 startUV = mul(_ViewProjection, float4(positionWS, 1));
-    // startUV.xyz /= startUV.w;
-
-    // _OutCascade[coords] = float4(frac(startUV.xy), 0, 1);
-    // return;
 
     // TODO: Don't transform CS->WS->CS, just use CS right away.
     _OutCascade[coords] = RayTrace(positionWS, directionWS, cascadeRange);
@@ -288,11 +248,10 @@ void MergeCascade(uint3 id : SV_DispatchThreadID)
     float4 c = AverageAngles(upperCoords + int2(0, upperCascadeDim));
     float4 d = AverageAngles(upperCoords + int2(upperCascadeDim, upperCascadeDim));
 
-
+    // Bilinear interpolation.  
     float2 weight = (lowerCascadeCenterPos - upperCascadeCenterPos) / float(upperCascadeDim);
     float4 m0 = lerp(a, b, weight.x);
     float4 m1 = lerp(c, d, weight.x);
-
     float4 upperRadiance = lerp(m0, m1, weight.y);
 
     radiance.rgb += upperRadiance.rgb * radiance.a;
