@@ -131,7 +131,7 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
     originCS.xyz /= originCS.w;
 
     float3 directionCS = normalize(mul((float3x3)_ViewProjection, directionWS));
-    directionCS *= _ColorTexture_TexelSize.w * 2;
+    directionCS *= _ColorTexture_TexelSize.w;
 
     float3 ray;
     for (int i = range.x; i < range.y; i++)
@@ -188,7 +188,7 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     float3 positionWS = ComputeWorldSpacePosition(float4(probeCenterUV, sceneDepth, 1), _InvViewProjection);
 
     float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
-    positionWS += viewDirectionWS * 0.01f;
+    positionWS += viewDirectionWS * 0.0001f;
 
     int2 cascadeRange = CalculateRange(_CascadeLevel);
 
