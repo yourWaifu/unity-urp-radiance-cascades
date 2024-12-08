@@ -153,6 +153,9 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
     return float4(0, 0, 0, 1);
 }
 
+#define RAD_TO_DEG 57.29578f
+#define DEG_TO_RAD 0.017453292f
+
 [numthreads(8,8,1)]
 void RenderCascade(uint3 id : SV_DispatchThreadID)
 {
@@ -170,9 +173,15 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     int probeSide = dot(floor(coords / sideSize), float2(1.0f, 2.0f));
     float2 indexInProbe = floor(fmod(coords, _ProbeSize));
 
+    // directionWS : [-1..1, -1..1, 0..2], Z is forward
     float3 directionWS = float3(0.0h, 0.0h, 2.0f);
-    directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
-    directionWS = normalize(directionWS);
+    // directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
+    // directionWS = normalize(directionWS);
+
+    float2 angle = (indexInProbe - 0.5f) * 90.0f * DEG_TO_RAD / _ProbeSize;
+    directionWS.xy = sin(angle);
+    directionWS.z = sqrt(1 - dot(directionWS.xy, directionWS.xy));
+
     directionWS = mul(BasisAA[probeSide], directionWS);
 
     float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
