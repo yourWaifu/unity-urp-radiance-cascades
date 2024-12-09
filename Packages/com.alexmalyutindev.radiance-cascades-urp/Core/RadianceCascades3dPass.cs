@@ -1,5 +1,6 @@
 using AlexMalyutinDev.RadianceCascades;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -29,8 +30,11 @@ public class RadianceCascades3dPass : ScriptableRenderPass
             (1 << CascadesCount) * 3 * scale
         )
         {
-            colorFormat = RenderTextureFormat.ARGB2101010,
+            colorFormat = RenderTextureFormat.ARGBHalf,
             enableRandomWrite = true,
+            mipCount = 0,
+            depthBufferBits = 0,
+            depthStencilFormat = GraphicsFormat.None,
         };
         for (int i = 0; i < _Cascades.Length; i++)
         {
@@ -62,7 +66,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
-            Render(cmd, ref renderingData, colorTexture);
+            Render(cmd, ref renderingData, colorTexture, depthTexture);
         }
 
         context.ExecuteCommandBuffer(cmd);
@@ -71,7 +75,12 @@ public class RadianceCascades3dPass : ScriptableRenderPass
         CommandBufferPool.Release(cmd);
     }
 
-    private void Render(CommandBuffer cmd, ref RenderingData renderingData, RTHandle colorTexture)
+    private void Render(
+        CommandBuffer cmd,
+        ref RenderingData renderingData,
+        RTHandle colorTexture,
+        RTHandle depthTexture
+    )
     {
         var sampleKey = "RenderCascades";
         cmd.BeginSample(sampleKey);
@@ -82,7 +91,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
                     cmd,
                     ref renderingData,
                     colorTexture,
-                    renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                    depthTexture,
                     2 << level,
                     level,
                     _Cascades[level]

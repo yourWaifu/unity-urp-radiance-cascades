@@ -165,6 +165,7 @@ Shader "Hidden/RadianceCascade/Blit"
             {
                 float2 sideOffset = 1.0f / float2(2.0f, 3.0f);
 
+                #if 1
                 float2 uvX = normalWS.x < 0 ? uv : uv + sideOffset.xy * float2(1, 0);
                 float2 uvY = normalWS.y < 0 ? uv + sideOffset.xy * float2(0, 1) : uv + sideOffset.xy * float2(1, 1);
                 float2 uvZ = normalWS.y < 0 ? uv + sideOffset.xy * float2(0, 2) : uv + sideOffset.xy * float2(1, 2);
@@ -181,6 +182,21 @@ Shader "Hidden/RadianceCascade/Blit"
                     x * weight.x +
                     y * weight.y +
                     z * weight.z;
+
+                #else
+
+                float4 x0 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv, 0) * 4;
+                float4 x1 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv + sideOffset.xy * float2(1, 0), 0) * 4;
+
+                float4 y0 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv + sideOffset.xy * float2(0, 1), 0) * 4;
+                float4 y1 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv + sideOffset.xy * float2(1, 1), 0) * 4;
+
+                float4 z0 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv + sideOffset.xy * float2(0, 2), 0) * 4;
+                float4 z1 = SAMPLE_TEXTURE2D_LOD(_BlitTexture, sampler_LinearClamp, uv + sideOffset.xy * float2(1, 2), 0) * 4;
+
+                return x0 + x1 + y0 + y1 + z0 + z1;
+
+                #endif
             }
 
             half4 Fragment(Varyings input) : SV_TARGET
@@ -190,13 +206,14 @@ Shader "Hidden/RadianceCascade/Blit"
                 const float2 sideSize = floor(_BlitTexture_TexelSize.zw / float2(2, 3));
                 const float probe0Size = 2.0f;
                 const float2 probeIndex = input.texcoord * sideSize / probe0Size;
-                const float2 w = fmod(probeIndex, 1.0f);
+                const float2 w = frac(probeIndex);
 
                 half3 normalWS = normalize(SampleSceneNormals(input.texcoord));
 
                 float2 coords = floor(probeIndex) * probe0Size;
                 float2 uv = (coords + 1.0f) * _BlitTexture_TexelSize.xy;
 
+                // BUG: Offset can lead to sampling adjacent side probes!
                 float3 offset = float3(_BlitTexture_TexelSize.xy * probe0Size, 0.0f);
                 half4 a = SamlpeSampleProbe2x2(uv, normalWS);
                 half4 b = SamlpeSampleProbe2x2(uv + offset.xz, normalWS);
