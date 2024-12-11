@@ -17,6 +17,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
     private readonly RadianceCascadeCompute _compute;
     private readonly int _renderCascadeKernel;
 
+    private bool _showDebugPreview = true;
+
 
     // High:
     // Using aspect 7/4(14/8) to be closer to 16/9.
@@ -33,7 +35,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
         new(32 * 3, 32 * 2), // 48x32 probes0
     };
 
-    public RadianceCascadesPass(ComputeShader radianceCascadesCs, ComputeShader radianceCascades3d, Material blit)
+    public RadianceCascadesPass(ComputeShader radianceCascadesCs, ComputeShader radianceCascades3d, Material blit, bool showDebugView)
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
         _radianceCascadesCs = radianceCascadesCs;
@@ -43,6 +45,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
         _blit = blit;
         _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
         // ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
+
+        _showDebugPreview = showDebugView;
     }
 
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
@@ -170,6 +174,7 @@ public class RadianceCascadesPass : ScriptableRenderPass
 
     private void PreviewCascades(CommandBuffer cmd, RTHandle[] rtHandles, float offset = 0.0f)
     {
+        if (!_showDebugPreview) { return; }
         cmd.BeginSample("Preview");
 
         const float scale = 1f / 8f;

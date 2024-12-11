@@ -6,6 +6,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     public Material BlitMaterial;
     public ComputeShader RadianceCascades;
     public ComputeShader RadianceCascades3d;
+    public bool showDebugView;
 
     [SerializeField]
     private RenderType _renderType;
@@ -15,7 +16,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
 
     public override void Create()
     {
-        _pass = new RadianceCascadesPass(RadianceCascades, RadianceCascades3d, BlitMaterial)
+        _pass = new RadianceCascadesPass(RadianceCascades, RadianceCascades3d, BlitMaterial, showDebugView)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
