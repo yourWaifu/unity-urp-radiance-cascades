@@ -179,10 +179,16 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     // directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
     // directionWS = normalize(directionWS);
 
-    float2 angle = indexInProbe * HALF_PI / _ProbeSize - 0.5f * HALF_PI;
-    directionWS.xy = sin(angle);
-    directionWS.z = sqrt(1 - dot(directionWS.xy, directionWS.xy));
+    // [0..probeSize-1] -> [0..(probeSize-1/_ProbeSize)] -> [0..(probeSize-1/_ProbeSize) * 90]
+    // ex. size=4: [0..3] -> [0..3/4] -> [0..3/4*90]
+    // float2 angle = indexInProbe / _ProbeSize * HALF_PI - 0.5f * HALF_PI;
 
+    // ([1..4] / 5 - 0.5) * 90
+    float2 angle = ((indexInProbe + 1) / (_ProbeSize + 1) - 0.5f) * HALF_PI;
+    directionWS.xy = sin(angle);
+    // NOTE: length(xy) ^ 2 = dot(xy, xy) 
+    directionWS.z = sqrt(1.0h - dot(directionWS.xy, directionWS.xy)) * 3.0h;
+    
     directionWS = mul(BasisAA[probeSide], directionWS);
 
     float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
