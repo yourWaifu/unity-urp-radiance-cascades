@@ -1,5 +1,6 @@
 struct VoxelData
 {
-    float4 color;
-    float4 position;
+    // TODO: Pack into uint[2 + 2]?
+    half4 color;
+    half4 position;
 };

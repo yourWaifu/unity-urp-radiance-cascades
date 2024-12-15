@@ -132,7 +132,6 @@ Shader "AlexM/Voxelization"
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
 
                 #ifdef UNITY_REVERSED_Z
-                // output.positionCS.z = mad(output.positionCS.z, -2.0, 1.0);
                 output.positionCS.z = 1.0 - output.positionCS.z;
                 #endif
 

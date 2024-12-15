@@ -20,7 +20,9 @@ namespace AlexMalyutinDev.RadianceCascades
         private readonly ShaderTagId _shaderTagId;
 
         private readonly RenderTextureDescriptor _dummyDesc;
-        private ComputeBuffer _voxelBuffer;
+
+        // Buffer to store all appeared voxels
+        private ComputeBuffer _rawVoxelBuffer;
 
         public Voxelizator(Shader voxelizatorShader, ComputeShader voxelizatorCompute)
         {
@@ -48,7 +50,7 @@ namespace AlexMalyutinDev.RadianceCascades
             // TODO:
             var volumeResolution = 256;
 
-            ReAllocateIfNeeded(ref _voxelBuffer, volumeResolution, VoxelData.Size, ComputeBufferType.Append);
+            ReAllocateIfNeeded(ref _rawVoxelBuffer, volumeResolution, VoxelData.Size, ComputeBufferType.Append);
 
             var desc = new RenderTextureDescriptor(volumeResolution, volumeResolution, RenderTextureFormat.ARGB32)
             {
@@ -81,7 +83,7 @@ namespace AlexMalyutinDev.RadianceCascades
             // Rendering
             cmd.GetTemporaryRT(DummyID, _dummyDesc);
             cmd.SetRenderTarget(DummyID, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare);
-            cmd.SetRandomWriteTarget(1, _voxelBuffer);
+            cmd.SetRandomWriteTarget(1, _rawVoxelBuffer);
             cmd.SetGlobalInt(Resolution, volumeResolution);
 
             var view = CreateViewMatrix(renderingData.cameraData.worldSpaceCameraPos, Quaternion.identity);
@@ -92,6 +94,7 @@ namespace AlexMalyutinDev.RadianceCascades
             cmd.DrawRendererList(rendererList);
 
             // TODO: Combine voxels into Texture3D
+            
         }
 
         public static void ReAllocateIfNeeded(
