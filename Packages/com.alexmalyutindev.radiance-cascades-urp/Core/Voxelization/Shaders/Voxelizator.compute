@@ -8,7 +8,7 @@
 #define COLOR_PRECISION (256.0h)
 
 // Input
-int Resolution;
+uint Resolution;
 ConsumeStructuredBuffer<VoxelData> VoxelBuffer;
 
 // Intermediate Buffers
@@ -19,7 +19,7 @@ RWStructuredBuffer<uint> VolumeCount;
 #define TO_LINEAR_ID(id) (id.x + id.y * Resolution + id.z * Resolution * Resolution)
 
 // Output
-RWTexture3D<half4> Target;
+RWTexture3D<float4> Target;
 
 
 // Parametrize
@@ -42,7 +42,7 @@ void CSParameterize()
 }
 
 
-[numthreads(4,4,4)]
+[numthreads(4, 4, 4)]
 void CSClear(uint3 id : SV_DispatchThreadID)
 {
     if (any(id >= Resolution)) return;
@@ -54,16 +54,18 @@ void CSClear(uint3 id : SV_DispatchThreadID)
 }
 
 
-[numthreads(64,1,1)]
+[numthreads(64, 1, 1)]
 void CSConsume(uint id : SV_DispatchThreadID)
 {
     VoxelData data = VoxelBuffer.Consume();
 
     DeviceMemoryBarrierWithGroupSync();
 
+    // TODO: Add data validation?
+
     uint4 intColor = (uint4)round(data.color * COLOR_PRECISION);
 
-    const uint3 positionPS = min(data.position, Resolution - 1);
+    const uint3 positionPS = min(data.position.xyz, Resolution - 1);
     const uint voxelId = TO_LINEAR_ID(positionPS);
     InterlockedAdd(VolumeRG[voxelId], intColor.r | intColor.g << 16);
     InterlockedAdd(VolumeBA[voxelId], intColor.b | intColor.a << 16);
@@ -71,7 +73,7 @@ void CSConsume(uint id : SV_DispatchThreadID)
 }
 
 
-[numthreads(4,4,4)]
+[numthreads(4, 4, 4)]
 void CSAggregate(uint3 id : SV_DispatchThreadID)
 {
     if (any(id >= Resolution)) return;

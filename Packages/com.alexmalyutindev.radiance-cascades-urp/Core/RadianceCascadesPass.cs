@@ -35,15 +35,21 @@ public class RadianceCascadesPass : ScriptableRenderPass
         new(32 * 3, 32 * 2), // 48x32 probes0
     };
 
-    public RadianceCascadesPass(ComputeShader radianceCascadesCs, ComputeShader radianceCascades3d, Material blit, bool showDebugView)
+    public RadianceCascadesPass(
+        RadianceCascadeResources resources,
+        bool showDebugView
+    )
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
-        _radianceCascadesCs = radianceCascadesCs;
+        _radianceCascadesCs = resources.RadianceCascades;
 
         _compute = new RadianceCascadeCompute(_radianceCascadesCs);
 
-        _blit = blit;
+        _blit = resources.BlitMaterial;
         _renderCascadeKernel = _radianceCascadesCs.FindKernel("RenderCascade");
+        
+        // BUG: Configuring with Depth and Color buffer dependency will cause to additional resolve of
+        // this buffers before RadianceCascadesPass
         // ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Color);
 
         _showDebugPreview = showDebugView;
@@ -155,7 +161,8 @@ public class RadianceCascadesPass : ScriptableRenderPass
         {
             for (int level = _Cascades.Length - 1; level > 0; level--)
             {
-                _compute.MergeCascades(cmd, _Cascades[level - 1], _Cascades[level], level - 1);
+                var lowerLevel = level - 1;
+                _compute.MergeCascades(cmd, _Cascades[lowerLevel], _Cascades[level], lowerLevel);
             }
         }
         cmd.EndSample(sampleKey);

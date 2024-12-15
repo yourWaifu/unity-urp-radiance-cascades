@@ -161,7 +161,7 @@ Shader "AlexM/Voxelization"
                     VoxelData data;
                     albedoAlpha.rgb += emission;
                     data.color = albedoAlpha;
-                    data.position = float4(positionXS, 0);
+                    data.position = half4(positionXS, 0);
                     VoxelBuffer.Append(data);
                 }
 

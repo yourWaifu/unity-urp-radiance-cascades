@@ -15,11 +15,11 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     private readonly Material _blitMaterial;
     private readonly RadianceCascade3dRenderer _radianceCascadeRenderer;
 
-    public RadianceCascades3dPass(ComputeShader radianceCascadesCs, Material blitMaterial)
+    public RadianceCascades3dPass(RadianceCascadeResources resources)
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
-        _radianceCascadeRenderer = new RadianceCascade3dRenderer(radianceCascadesCs);
-        _blitMaterial = blitMaterial;
+        _radianceCascadeRenderer = new RadianceCascade3dRenderer(resources.RadianceCascades3d);
+        _blitMaterial = resources.BlitMaterial;
     }
 
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)

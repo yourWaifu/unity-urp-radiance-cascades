@@ -1,9 +1,10 @@
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace AlexMalyutinDev.RadianceCascades.Voxelization
 {
-    public class VoxelizatorCompute
+    public class VoxelizatorCompute : IDisposable
     {
         private readonly ComputeShader _compute;
         private readonly int _clearKernel;
@@ -11,7 +12,7 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
         private readonly int _consumeKernel;
         private readonly int _aggregateKernel;
 
-        private readonly ComputeBuffer _renderKernelArguments;
+        private readonly ComputeBuffer _consumeKernelArguments;
         private readonly int _renderKernelX;
         private readonly int _renderKernelY;
         private readonly int _renderKernelZ;
@@ -31,6 +32,14 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
             _consumeKernel = compute.FindKernel("CSConsume");
             _parametrizeKernel = compute.FindKernel("CSParameterize");
             _aggregateKernel = compute.FindKernel("CSAggregate");
+
+            _consumeKernelArguments = new ComputeBuffer(3, sizeof(int), ComputeBufferType.IndirectArguments);
+            _consumeKernelArguments.SetData(new int[] { 1, 1, 1 });
+
+            _compute.GetKernelThreadGroupSizes(_aggregateKernel, out var x, out var y, out var z);
+            _renderKernelX = (int) x;
+            _renderKernelY = (int) y;
+            _renderKernelZ = (int) z;
         }
 
         public void Prepare(int resolution)
@@ -67,33 +76,12 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
 
             ClearTempBuffers(cmd, resolution);
             ConsumeVoxels(cmd, rawVoxelsBuffer);
-            CombineRadiance(cmd, resolution, target);
-        }
-
-        private void ConsumeVoxels(CommandBuffer cmd, ComputeBuffer rawVoxelsBuffer)
-        {
-            const string tag = "Voxel." + nameof(ConsumeVoxels);
-
-            cmd.BeginSample(tag);
-
-            // Compute threads count
-            cmd.CopyCounterValue(rawVoxelsBuffer, _renderKernelArguments, dstOffsetBytes: 0);
-            cmd.SetComputeIntParams(_compute, "NumThreads", _renderKernelX, _renderKernelY, _renderKernelZ);
-            cmd.SetComputeBufferParam(_compute, _parametrizeKernel, "Arguments", _renderKernelArguments);
-            cmd.DispatchCompute(_compute, _parametrizeKernel, 1, 1, 1);
-
-            // Consume raw voxel buffer into [RG,BA,Count] buffers.
-            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeRG", _volumeRGBuffer);
-            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeBA", _volumeBABuffer);
-            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeCount", _volumeCountBuffer);
-            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VoxelBuffer", rawVoxelsBuffer);
-            cmd.DispatchCompute(_compute, _consumeKernel, _renderKernelArguments, argsOffset: 0);
-
-            cmd.EndSample(tag);
+            AggregateVoxels(cmd, resolution, target);
         }
 
         public void CleanUp()
         {
+            _initialized = false;
             _volumeRGBuffer?.Release();
             _volumeBABuffer?.Release();
             _volumeCountBuffer?.Release();
@@ -115,9 +103,32 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
             cmd.EndSample(tag);
         }
 
-        private void CombineRadiance(CommandBuffer cmd, int resolution, RTHandle target)
+        private void ConsumeVoxels(CommandBuffer cmd, ComputeBuffer rawVoxelsBuffer)
         {
-            const string tag = "Voxel." + nameof(CombineRadiance);
+            const string tag = "Voxel." + nameof(ConsumeVoxels);
+
+            cmd.BeginSample(tag);
+
+            // Compute threads count
+            cmd.CopyCounterValue(rawVoxelsBuffer, _consumeKernelArguments, dstOffsetBytes: 0);
+            cmd.SetComputeIntParams(_compute, "NumThreads", _renderKernelX, _renderKernelY, _renderKernelZ);
+            cmd.SetComputeBufferParam(_compute, _parametrizeKernel, "Arguments", _consumeKernelArguments);
+            cmd.DispatchCompute(_compute, _parametrizeKernel, 1, 1, 1);
+
+            // Consume raw voxel buffer into [RG,BA,Count] buffers.
+            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeRG", _volumeRGBuffer);
+            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeBA", _volumeBABuffer);
+            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VolumeCount", _volumeCountBuffer);
+
+            cmd.SetComputeBufferParam(_compute, _consumeKernel, "VoxelBuffer", rawVoxelsBuffer);
+            cmd.DispatchCompute(_compute, _consumeKernel, _consumeKernelArguments, argsOffset: 0);
+
+            cmd.EndSample(tag);
+        }
+
+        private void AggregateVoxels(CommandBuffer cmd, int resolution, RTHandle target)
+        {
+            const string tag = "Voxel." + nameof(AggregateVoxels);
 
             cmd.BeginSample(tag);
 
@@ -131,6 +142,14 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
             cmd.DispatchCompute(_compute, _aggregateKernel, aggregateThreads, aggregateThreads, aggregateThreads);
 
             cmd.EndSample(tag);
+        }
+
+        public void Dispose()
+        {
+            _consumeKernelArguments?.Dispose();
+            _volumeRGBuffer?.Dispose();
+            _volumeBABuffer?.Dispose();
+            _volumeCountBuffer?.Dispose();
         }
     }
 }
