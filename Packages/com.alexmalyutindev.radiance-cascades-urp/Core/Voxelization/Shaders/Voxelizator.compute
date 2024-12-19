@@ -1,8 +1,10 @@
 #pragma kernel CSParameterize
 #pragma kernel CSClear
+#pragma kernel CSClear3d
 #pragma kernel CSConsume
 #pragma kernel CSAggregate
 
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 #include "VoxelData.hlsl"
 
 #define COLOR_PRECISION (256.0h)
@@ -51,6 +53,13 @@ void CSClear(uint3 id : SV_DispatchThreadID)
     VolumeRG[i] = 0u;
     VolumeBA[i] = 0u;
     VolumeCount[i] = 0u;
+}
+
+[numthreads(4, 4, 4)]
+void CSClear3d(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id >= Resolution)) return;
+    Target[id] = 0.0f;
 }
 
 

@@ -6,6 +6,7 @@ using UnityEngine.Rendering.Universal;
 
 public class RadianceCascades3dPass : ScriptableRenderPass
 {
+    private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
     private const int CascadesCount = 5;
     private readonly ProfilingSampler _profilingSampler;
 
@@ -15,10 +16,14 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     private readonly Material _blitMaterial;
     private readonly RadianceCascade3dRenderer _radianceCascadeRenderer;
 
-    public RadianceCascades3dPass(RadianceCascadeResources resources)
+    public RadianceCascades3dPass(
+        RadianceCascadeResources resources,
+        RadianceCascadesRenderingData radianceCascadesRenderingData
+    )
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
         _radianceCascadeRenderer = new RadianceCascade3dRenderer(resources.RadianceCascades3d);
+        _radianceCascadesRenderingData = radianceCascadesRenderingData;
         _blitMaterial = resources.BlitMaterial;
     }
 
@@ -83,6 +88,9 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     )
     {
         var sampleKey = "RenderCascades";
+
+        // TODO: Bind _radianceCascadesRenderingData.SceneVolume
+
         cmd.BeginSample(sampleKey);
         {
             for (int level = 0; level < _Cascades.Length; level++)
@@ -90,6 +98,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
                 _radianceCascadeRenderer.RenderCascade(
                     cmd,
                     ref renderingData,
+                    _radianceCascadesRenderingData,
                     colorTexture,
                     depthTexture,
                     2 << level,

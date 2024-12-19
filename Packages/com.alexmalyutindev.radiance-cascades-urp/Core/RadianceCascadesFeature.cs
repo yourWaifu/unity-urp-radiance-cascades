@@ -18,18 +18,22 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     private RadianceCascades3dPass _pass3d;
     private VoxelizationPass _voxelizationPass;
 
+    private RadianceCascadesRenderingData _radianceCascadesRenderingData;
+
     public override void Create()
     {
+        _radianceCascadesRenderingData = new RadianceCascadesRenderingData();
+
         _pass = new RadianceCascadesPass(Resources, showDebugView)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
 
-        _voxelizationPass = new VoxelizationPass(Resources)
+        _voxelizationPass = new VoxelizationPass(Resources, _radianceCascadesRenderingData)
         {
-            renderPassEvent = RenderPassEvent.BeforeRendering,
+            renderPassEvent = RenderPassEvent.AfterRenderingShadows,
         };
-        _pass3d = new RadianceCascades3dPass(Resources)
+        _pass3d = new RadianceCascades3dPass(Resources, _radianceCascadesRenderingData)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };

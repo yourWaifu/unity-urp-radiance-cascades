@@ -8,6 +8,7 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
     {
         private readonly ComputeShader _compute;
         private readonly int _clearKernel;
+        private readonly int _clear3dKernel;
         private readonly int _parametrizeKernel;
         private readonly int _consumeKernel;
         private readonly int _aggregateKernel;
@@ -29,6 +30,7 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
             _compute = compute;
 
             _clearKernel = compute.FindKernel("CSClear");
+            _clear3dKernel = compute.FindKernel("CSClear3d");
             _consumeKernel = compute.FindKernel("CSConsume");
             _parametrizeKernel = compute.FindKernel("CSParameterize");
             _aggregateKernel = compute.FindKernel("CSAggregate");
@@ -101,6 +103,15 @@ namespace AlexMalyutinDev.RadianceCascades.Voxelization
             cmd.DispatchCompute(_compute, _clearKernel, clearThreads, clearThreads, clearThreads);
 
             cmd.EndSample(tag);
+        }
+
+        public void ClearTexture3d(CommandBuffer cmd, RTHandle volume)
+        {
+            var resolution = volume.rt.width;
+            var threadGroups = resolution / 4;
+            cmd.SetComputeIntParam(_compute, "Resolution", resolution);
+            cmd.SetComputeTextureParam(_compute, _clear3dKernel, "Target", volume);
+            cmd.DispatchCompute(_compute, _clear3dKernel, threadGroups, threadGroups, threadGroups);
         }
 
         private void ConsumeVoxels(CommandBuffer cmd, ComputeBuffer rawVoxelsBuffer)

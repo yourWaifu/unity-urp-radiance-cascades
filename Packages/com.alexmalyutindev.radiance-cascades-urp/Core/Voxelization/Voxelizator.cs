@@ -16,6 +16,7 @@ namespace AlexMalyutinDev.RadianceCascades
 
         public static readonly int DummyID = Shader.PropertyToID(nameof(DummyID));
         public static readonly int Resolution = Shader.PropertyToID(nameof(Resolution));
+        private const float Extend = 15;
 
         private readonly Shader _shader;
         private readonly ShaderTagId _shaderTagId;
@@ -62,7 +63,7 @@ namespace AlexMalyutinDev.RadianceCascades
         )
         {
             var cameraData = renderingData.cameraData;
-            
+
             // Prepare
             var drawingSettings = RenderingUtils.CreateDrawingSettings(
                 _shaderTagId,
@@ -80,11 +81,26 @@ namespace AlexMalyutinDev.RadianceCascades
             );
 
 
+            var volumeDesc = new RenderTextureDescriptor(resolution, resolution, RenderTextureFormat.ARGB32)
+            {
+                dimension = TextureDimension.Tex3D,
+                volumeDepth = resolution,
+                enableRandomWrite = true,
+                mipCount = 0,
+                depthStencilFormat = GraphicsFormat.None,
+            };
+            // TODO: Clear Volume!
+            RenderingUtils.ReAllocateIfNeeded(ref targetVolume, volumeDesc);
+            _voxelizatorCompute.ClearTexture3d(cmd, targetVolume);
+
+
             // Rendering
             cmd.GetTemporaryRT(DummyID, _dummyDesc);
             cmd.SetRenderTarget(DummyID, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare);
             cmd.SetRandomWriteTarget(1, _rawVoxelBuffer);
             cmd.SetGlobalInt(Resolution, resolution);
+
+            cmd.SetGlobalTexture("_Volume", targetVolume);
 
             var volumeCenter = renderingData.cameraData.worldSpaceCameraPos;
             var forward = Quaternion.LookRotation(Vector3.forward, Vector3.up);
@@ -93,7 +109,7 @@ namespace AlexMalyutinDev.RadianceCascades
 
             // Forward projection.
             var view = CreateViewMatrix(volumeCenter, forward);
-            var proj = CreateBoxProjection(5); // TODO
+            var proj = CreateBoxProjection(Extend); // TODO
             cmd.SetViewProjectionMatrices(view, proj);
             cmd.SetGlobalInt("Axis", 0);
 
@@ -125,25 +141,14 @@ namespace AlexMalyutinDev.RadianceCascades
                 }
                 cmd.EndSample("TopProjection");
             }
-            
+
             cmd.ClearRandomWriteTargets();
             cmd.ReleaseTemporaryRT(DummyID);
 
-
-            // NOTE: Process collected voxels
-            var volumeDesc = new RenderTextureDescriptor(resolution, resolution, RenderTextureFormat.ARGB32)
-            {
-                dimension = TextureDimension.Tex3D,
-                volumeDepth = resolution,
-                enableRandomWrite = true,
-                mipCount = 0,
-                depthStencilFormat = GraphicsFormat.None,
-            };
-            RenderingUtils.ReAllocateIfNeeded(ref targetVolume, volumeDesc);
-            
             // NOTE: Restore matrices
             cmd.SetViewProjectionMatrices(cameraData.GetViewMatrix(), cameraData.GetProjectionMatrix());
 
+            return;
             _voxelizatorCompute.Dispatch(cmd, resolution, _rawVoxelBuffer, targetVolume);
         }
 
@@ -160,6 +165,15 @@ namespace AlexMalyutinDev.RadianceCascades
                 buffer?.Release();
                 buffer = new ComputeBuffer(count, stride, type, usage);
             }
+        }
+
+        public static Matrix4x4 CreateWorldToVolumeMatrix(ref RenderingData renderingData)
+        {
+            var forward = Quaternion.LookRotation(-Vector3.forward, Vector3.up);
+            var view = CreateViewMatrix(renderingData.cameraData.worldSpaceCameraPos, forward);
+            var proj = CreateBoxProjection(Extend);
+
+            return view * proj;
         }
 
         public static Matrix4x4 CreateViewMatrix(Vector3 position, Quaternion rotation)
@@ -189,7 +203,7 @@ namespace AlexMalyutinDev.RadianceCascades
 
         public void Dispose()
         {
-            _voxelizatorCompute.Dispose();
+            _voxelizatorCompute?.Dispose();
             _rawVoxelBuffer?.Dispose();
         }
     }

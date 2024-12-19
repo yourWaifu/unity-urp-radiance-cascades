@@ -44,6 +44,11 @@ Shader "AlexM/Voxelization"
             #pragma fragment Fragment
 
             // -------------------------------------
+            // Universal Pipeline keywords
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+
+            // -------------------------------------
             // Material Keywords
             #pragma shader_feature_local_fragment _ALPHATEST_ON
             #pragma shader_feature_local_fragment _EMISSION
@@ -53,6 +58,7 @@ Shader "AlexM/Voxelization"
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "VoxelData.hlsl"
 
             struct Attribute
@@ -67,8 +73,9 @@ Shader "AlexM/Voxelization"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float3 normalWS : NORMAL;
                 float2 uv : TEXCOORD0;
+                float3 normalWS : TEXCOORD1;
+                float3 positonWS : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -95,6 +102,7 @@ Shader "AlexM/Voxelization"
             uint Axis;
             uint Resolution;
             AppendStructuredBuffer<VoxelData> VoxelBuffer;
+            RWTexture3D<float4> _Volume;
 
             float3 TransformClipSpaceToVoxel(float4 positionCS)
             {
@@ -129,7 +137,9 @@ Shader "AlexM/Voxelization"
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS.xyz);
                 output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                output.positonWS = positionWS;
+                output.positionCS = TransformWorldToHClip(positionWS);
 
                 #ifdef UNITY_REVERSED_Z
                 output.positionCS.z = 1.0 - output.positionCS.z;
@@ -162,7 +172,14 @@ Shader "AlexM/Voxelization"
                     albedoAlpha.rgb += emission;
                     data.color = albedoAlpha;
                     data.position = half4(positionXS, 0);
-                    VoxelBuffer.Append(data);
+                    // VoxelBuffer.Append(data);
+
+                    float4 shadowCoord = TransformWorldToShadowCoord(input.positonWS);
+                    Light mainLight = GetMainLight(shadowCoord);
+                    half3 color = albedoAlpha.rgb * mainLight.shadowAttenuation + emission.rgb;
+
+                    // TODO: Occlusion voxel, agregate with InterlockedMax()
+                    _Volume[data.position.xyz] = half4(color, albedoAlpha.a);
                 }
 
                 return 0.0h;
