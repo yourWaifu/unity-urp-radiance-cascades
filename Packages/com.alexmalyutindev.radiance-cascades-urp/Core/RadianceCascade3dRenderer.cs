@@ -41,7 +41,7 @@ namespace AlexMalyutinDev.RadianceCascades
             var proj = renderingData.cameraData.GetGPUProjectionMatrix();
             // var view = renderingData.cameraData.camera.worldToCameraMatrix;
             // var proj = renderingData.cameraData.camera.projectionMatrix;
-            
+
 
             var viewProj = view * proj;
             cmd.SetComputeMatrixParam(_compute, ShaderIds.View, view);
@@ -56,10 +56,28 @@ namespace AlexMalyutinDev.RadianceCascades
 
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.ColorTexture, color);
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.DepthTexture, depth);
-            
+
             cmd.SetComputeMatrixParam(_compute, "_WorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume);
-            cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.SceneVolume, radianceCascadesRenderingData.SceneVolume);
-            
+            cmd.SetComputeMatrixParam(_compute, "_InvWorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume.inverse);
+            var volumeRT = radianceCascadesRenderingData.SceneVolume.rt;
+            var _SceneVolume_TexelSize = new Vector4(
+                1.0f / volumeRT.width,
+                1.0f / volumeRT.height,
+                volumeRT.width,
+                volumeRT.height
+            );
+            cmd.SetComputeVectorParam(
+                _compute,
+                "_SceneVolume_TexelSize",
+                _SceneVolume_TexelSize
+            );
+            cmd.SetComputeTextureParam(
+                _compute,
+                _renderKernel,
+                ShaderIds.SceneVolume,
+                radianceCascadesRenderingData.SceneVolume
+            );
+
 
             // Output
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.OutCascade, target);

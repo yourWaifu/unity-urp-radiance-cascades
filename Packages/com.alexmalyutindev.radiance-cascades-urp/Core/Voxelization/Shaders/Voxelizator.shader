@@ -72,10 +72,11 @@ Shader "AlexM/Voxelization"
 
             struct Varyings
             {
-                float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                float3 normalWS : TEXCOORD1;
-                float3 positonWS : TEXCOORD2;
+                float3 positionWS : TEXCOORD1;
+                float3 normalWS : TEXCOORD2;
+
+                float4 positionCS : SV_POSITION;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -101,7 +102,6 @@ Shader "AlexM/Voxelization"
 
             uint Axis;
             uint Resolution;
-            AppendStructuredBuffer<VoxelData> VoxelBuffer;
             RWTexture3D<float4> _Volume;
 
             float3 TransformClipSpaceToVoxel(float4 positionCS)
@@ -129,7 +129,7 @@ Shader "AlexM/Voxelization"
 
             Varyings Vertex(Attribute input)
             {
-                Varyings output = (Varyings)0;
+                Varyings output;
 
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
@@ -138,7 +138,7 @@ Shader "AlexM/Voxelization"
                 output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 
                 float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
-                output.positonWS = positionWS;
+                output.positionWS = positionWS;
                 output.positionCS = TransformWorldToHClip(positionWS);
 
                 #ifdef UNITY_REVERSED_Z
@@ -158,6 +158,7 @@ Shader "AlexM/Voxelization"
 
                 // NOTE: XS is a voxel space
                 float3 positionXS = TransformClipSpaceToVoxel(input.positionCS);
+                float3 positionWS = input.positionWS;
 
                 half4 albedoAlpha = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
                 #if defined(_EMISSION)
@@ -165,21 +166,17 @@ Shader "AlexM/Voxelization"
                 #else
                 half4 emission = 0;
                 #endif
-                
+
                 if (albedoAlpha.a > _Cutoff)
                 {
-                    VoxelData data;
-                    albedoAlpha.rgb += emission;
-                    data.color = albedoAlpha;
-                    data.position = half4(positionXS, 0);
-                    // VoxelBuffer.Append(data);
+                    float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
 
-                    float4 shadowCoord = TransformWorldToShadowCoord(input.positonWS);
                     Light mainLight = GetMainLight(shadowCoord);
-                    half3 color = albedoAlpha.rgb * mainLight.shadowAttenuation + emission.rgb;
+                    float NdotL = max(0.0f, dot(input.normalWS, mainLight.direction));
+                    float3 color = albedoAlpha.rgb * NdotL * saturate(mainLight.shadowAttenuation) + emission.rgb;
 
                     // TODO: Occlusion voxel, agregate with InterlockedMax()
-                    _Volume[data.position.xyz] = half4(color, albedoAlpha.a);
+                    _Volume[positionXS] = float4(saturate(color), albedoAlpha.a);
                 }
 
                 return 0.0h;

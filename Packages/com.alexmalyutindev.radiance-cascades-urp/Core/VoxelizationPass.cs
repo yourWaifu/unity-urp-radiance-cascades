@@ -9,7 +9,7 @@ namespace AlexMalyutinDev.RadianceCascades
     {
         private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
         private readonly Voxelizator _voxelizator;
-        private readonly int _resolution = 64;
+        private readonly int _resolution = 128;
 
         public VoxelizationPass(
             RadianceCascadeResources resources,
@@ -40,7 +40,10 @@ namespace AlexMalyutinDev.RadianceCascades
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
 
-                _radianceCascadesRenderingData.WorldToVolume = Voxelizator.CreateWorldToVolumeMatrix(ref renderingData);
+                _radianceCascadesRenderingData.WorldToVolume = Voxelizator.CreateWorldToVolumeMatrix(
+                    ref renderingData,
+                    _resolution
+                );
                 _voxelizator.VoxelizeGeometry(
                     cmd,
                     ref context,

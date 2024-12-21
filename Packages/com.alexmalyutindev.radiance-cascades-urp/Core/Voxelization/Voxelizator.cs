@@ -167,13 +167,11 @@ namespace AlexMalyutinDev.RadianceCascades
             }
         }
 
-        public static Matrix4x4 CreateWorldToVolumeMatrix(ref RenderingData renderingData)
+        public static Matrix4x4 CreateWorldToVolumeMatrix(ref RenderingData renderingData, int resolution)
         {
-            var forward = Quaternion.LookRotation(-Vector3.forward, Vector3.up);
-            var view = CreateViewMatrix(renderingData.cameraData.worldSpaceCameraPos, forward);
-            var proj = CreateBoxProjection(Extend);
-
-            return view * proj;
+            // TODO: Make better volume bounds placing.
+            return CreateBoxProjection(Extend) *
+                CreateViewMatrix(renderingData.cameraData.worldSpaceCameraPos, Quaternion.identity);
         }
 
         public static Matrix4x4 CreateViewMatrix(Vector3 position, Quaternion rotation)
