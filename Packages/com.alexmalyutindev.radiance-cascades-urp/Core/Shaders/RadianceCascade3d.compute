@@ -1,15 +1,18 @@
 #pragma kernel RenderCascade
+#pragma kernel RenderCascadeVoxel
 #pragma kernel MergeCascade
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Common.hlsl"
 
 // Layout:
-// .______________.
-// | +X | +Y | +Z |
-// |____|____|____|
-// | -X | -Y | -Z |
-// |____|____|____|
+// ._____________.
+// |  +Z  |  -Z  |
+// |______|______|
+// |  +Y  |  -Y  |
+// |______|______|
+// |  +X  |  -X  |
+// |______|______|
 RWTexture2D<float4> _OutCascade;
 int2 _ProbesCount;
 
@@ -163,7 +166,7 @@ float4 RayTrace(float3 originWS, float3 directionWS, int2 range)
 float4 RayTraceVolume(float3 originWS, float3 directionWS, int2 range)
 {
     float3 origin = mul(_WorldToSceneVolume, float4(originWS, 1.0f)).xyz;
-    float3 direction = normalize(mul((float3x3)_WorldToSceneVolume, directionWS)) * _SceneVolume_TexelSize.x;
+    float3 direction = normalize(mul((float3x3)_WorldToSceneVolume, directionWS)) * _SceneVolume_TexelSize.x * 0.7;
 
     float3 ray;
     for (int i = range.x; i < range.y; i++)
@@ -186,11 +189,11 @@ float4 RayTraceVolume(float3 originWS, float3 directionWS, int2 range)
             // TODO: Sample ColorBuffer.
             float3 rayWS = mul(_InvWorldToSceneVolume, float4(ray, 1.0f)).xyz;
             float4 rayCS = TransformWorldToHClip(rayWS);
-            rayCS.xy /= rayCS.w;
+            rayCS.xy /= rayCS.ww;
             rayCS.xy = rayCS.xy * 0.5f + 0.5f;
             rayCS.y = 1 - rayCS.y;
 
-            float4 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_LinearClamp, rayCS, 0);
+            float4 color = SAMPLE_TEXTURE2D_LOD(_ColorTexture, sampler_PointClamp, rayCS.xy, 0);
             color.a = 0.0f;
             return color;
         }
@@ -249,22 +252,58 @@ void RenderCascade(uint3 id : SV_DispatchThreadID)
     float3 positionWS = GetPositionWS(probeCenterUV, sceneDepth);
 
     float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
-    positionWS += viewDirectionWS * 0.5f;
+    positionWS += viewDirectionWS * 0.01f;
 
     int2 cascadeRange = CalculateRange(_CascadeLevel);
 
     // TODO: Don't transform CS->WS->CS, just use CS right away.
-    // _OutCascade[coords] = RayTrace(positionWS, directionWS, cascadeRange);
-    _OutCascade[coords] = RayTraceVolume(positionWS, directionWS, cascadeRange);
-
-    float4 rayOrigin = mul(_WorldToSceneVolume, float4(positionWS, 1));
-    // rayOrigin.xyz = rayOrigin.xyz * 0.5 + 0.5;
-    // float4 volume = SAMPLE_TEXTURE3D_LOD(_SceneVolume, sampler_PointClamp, rayOrigin, 0);
-    // _OutCascade[coords] = float4(volume.rgb, 0);
-    // _OutCascade[coords] = float4(frac(rayOrigin.xyz * _SceneVolume_TexelSize.z), 0);
-    // _OutCascade[coords] = float4(positionWS.xyz * 0.1, 0);
+    _OutCascade[coords] = RayTrace(positionWS, directionWS, cascadeRange);
 }
 
+
+[numthreads(8,8,1)]
+void RenderCascadeVoxel(uint3 id : SV_DispatchThreadID)
+{
+    int2 coords = id.xy;
+    if (any(coords > _CascadeBufferSize.xy))
+    {
+        return;
+    }
+
+    float2 sideSize = _CascadeBufferSize.xy / float2(2, 3);
+    float2 sideSizeRcp = float2(2, 3) * _CascadeBufferSize.zw;
+
+    float2 probeCenterUV = (floor(fmod(coords, sideSize) / _ProbeSize) * _ProbeSize + 0.5f * _ProbeSize) * sideSizeRcp;
+
+    int probeSide = dot(floor(coords / sideSize), float2(1.0f, 2.0f));
+    float2 indexInProbe = floor(fmod(coords, _ProbeSize));
+
+    // directionWS : [-1..1, -1..1, 0..2], Z is forward
+    float3 directionWS = float3(0.0h, 0.0h, 2.0f);
+    // directionWS.xy = indexInProbe / (_ProbeSize - 1.0f) * 2.0f - 1.0f;
+    // directionWS = normalize(directionWS);
+
+    // [0..probeSize-1] -> [0..(probeSize-1/_ProbeSize)] -> [0..(probeSize-1/_ProbeSize) * 90]
+    // ex. size=4: [0..3] -> [0..3/4] -> [0..3/4*90]
+    // float2 angle = indexInProbe / _ProbeSize * HALF_PI - 0.5f * HALF_PI;
+
+    // ([1..4] / 5 - 0.5) * 90
+    float2 angle = ((indexInProbe + 1) / (_ProbeSize + 1) - 0.5f) * HALF_PI;
+    directionWS.xy = sin(angle);
+    // NOTE: length(xy) ^ 2 = dot(xy, xy) 
+    directionWS.z = 1.0h; // sqrt(1.0h - dot(directionWS.xy, directionWS.xy)) * 3.0h;
+
+    directionWS = mul(BasisAA[probeSide], directionWS);
+
+    float sceneDepth = SAMPLE_DEPTH_TEXTURE_LOD(_DepthTexture, sampler_PointClamp, probeCenterUV, 0);
+    float3 positionWS = GetPositionWS(probeCenterUV, sceneDepth);
+
+    float3 viewDirectionWS = normalize(_WorldSpaceCameraPos.xyz - positionWS);
+    positionWS += viewDirectionWS * 0.5f; // TODO: offset by voxel szie
+
+    int2 cascadeRange = CalculateRange(_CascadeLevel);
+    _OutCascade[coords] = RayTraceVolume(positionWS, directionWS, cascadeRange);
+}
 
 /////////////
 /// MERGE ///

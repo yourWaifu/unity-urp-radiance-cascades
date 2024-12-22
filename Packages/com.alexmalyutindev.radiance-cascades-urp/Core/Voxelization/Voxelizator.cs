@@ -16,7 +16,7 @@ namespace AlexMalyutinDev.RadianceCascades
 
         public static readonly int DummyID = Shader.PropertyToID(nameof(DummyID));
         public static readonly int Resolution = Shader.PropertyToID(nameof(Resolution));
-        private const float Extend = 15;
+        private const float Extend = 10;
 
         private readonly Shader _shader;
         private readonly ShaderTagId _shaderTagId;
