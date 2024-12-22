@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -5,7 +6,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace AlexMalyutinDev.RadianceCascades.HiZDepth
 {
-    public class HiZDepthPass : ScriptableRenderPass
+    public class HiZDepthPass : ScriptableRenderPass, IDisposable
     {
         private readonly Material _material;
         private RTHandle _hiZDepth;
@@ -16,7 +17,6 @@ namespace AlexMalyutinDev.RadianceCascades.HiZDepth
         {
             _hiZDepthCS = hiZDepthCS;
             _material = hiZDepthMaterial;
-            // ConfigureInput(ScriptableRenderPassInput.Depth);
         }
 
         public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
@@ -104,6 +104,12 @@ namespace AlexMalyutinDev.RadianceCascades.HiZDepth
 
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
+        }
+
+        public void Dispose()
+        {
+            _tempDepth?.Release();
+            _hiZDepth?.Release();
         }
     }
 }

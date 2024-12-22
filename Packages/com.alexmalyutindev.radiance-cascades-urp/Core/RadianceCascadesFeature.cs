@@ -7,9 +7,6 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
 {
     public RadianceCascadeResources Resources;
 
-    public Material BlitMaterial;
-    public ComputeShader RadianceCascades;
-    public ComputeShader RadianceCascades3d;
     public bool showDebugView;
 
     [SerializeField]
@@ -48,11 +45,6 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        if (RadianceCascades == null || RadianceCascades3d == null || BlitMaterial == null)
-        {
-            return;
-        }
-
         if (renderingData.cameraData.isPreviewCamera)
         {
             return;
@@ -74,7 +66,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     protected override void Dispose(bool disposing)
     {
         _voxelizationPass?.Dispose();
-        _voxelizationPass = null;
+        _hiZDepthPass?.Dispose();
     }
 
     private enum RenderType
