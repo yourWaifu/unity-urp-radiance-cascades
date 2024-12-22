@@ -4,13 +4,13 @@ using UnityEngine.Rendering.Universal;
 
 namespace AlexMalyutinDev.RadianceCascades
 {
-    public class RadianceCascade3dRenderer
+    public class RadianceCascade3d
     {
         private readonly ComputeShader _compute;
         private readonly int _renderKernel;
         private readonly int _mergeKernel;
 
-        public RadianceCascade3dRenderer(ComputeShader compute)
+        public RadianceCascade3d(ComputeShader compute)
         {
             _compute = compute;
             _renderKernel = _compute.FindKernel("RenderCascade");

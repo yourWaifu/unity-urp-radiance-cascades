@@ -6,15 +6,15 @@ using UnityEngine.Rendering.Universal;
 
 public class RadianceCascades3dPass : ScriptableRenderPass
 {
-    private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
     private const int CascadesCount = 5;
+    private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
     private readonly ProfilingSampler _profilingSampler;
 
     private RTHandle[] _Cascades = new RTHandle[CascadesCount];
     private static readonly string[] _cascade3dNames = GenNames("_Cascade", CascadesCount);
 
     private readonly Material _blitMaterial;
-    private readonly RadianceCascade3dRenderer _radianceCascadeRenderer;
+    private readonly RadianceCascade3d _radianceCascade;
 
     public RadianceCascades3dPass(
         RadianceCascadeResources resources,
@@ -22,7 +22,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     )
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
-        _radianceCascadeRenderer = new RadianceCascade3dRenderer(resources.RadianceCascades3d);
+        _radianceCascade = new RadianceCascade3d(resources.RadianceCascades3d);
         _radianceCascadesRenderingData = radianceCascadesRenderingData;
         _blitMaterial = resources.BlitMaterial;
     }
@@ -95,7 +95,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
         {
             for (int level = 0; level < _Cascades.Length; level++)
             {
-                _radianceCascadeRenderer.RenderCascade(
+                _radianceCascade.RenderCascade(
                     cmd,
                     ref renderingData,
                     _radianceCascadesRenderingData,
@@ -116,7 +116,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
         {
             for (int level = _Cascades.Length - 1; level > 0; level--)
             {
-                _radianceCascadeRenderer.MergeCascades(
+                _radianceCascade.MergeCascades(
                     cmd,
                     _Cascades[level - 1],
                     _Cascades[level],
