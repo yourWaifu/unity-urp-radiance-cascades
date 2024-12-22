@@ -16,6 +16,8 @@ namespace AlexMalyutinDev.RadianceCascades
         public static readonly int ColorTextureTexelSize = Shader.PropertyToID("_ColorTexture_TexelSize");
         
         public static readonly int DepthTexture = Shader.PropertyToID("_DepthTexture");
+        public static readonly int SceneVolume = Shader.PropertyToID("_SceneVolume");
+
         public static readonly int OutCascade = Shader.PropertyToID("_OutCascade");
     }
 }

@@ -1,0 +1,115 @@
+#pragma kernel CSParameterize
+#pragma kernel CSClear
+#pragma kernel CSClear3d
+#pragma kernel CSConsume
+#pragma kernel CSAggregate
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "VoxelData.hlsl"
+
+#define COLOR_PRECISION (256.0h)
+
+// Input
+uint Resolution;
+ConsumeStructuredBuffer<VoxelData> VoxelBuffer;
+
+// Intermediate Buffers
+RWStructuredBuffer<uint> VolumeRG;
+RWStructuredBuffer<uint> VolumeBA;
+RWStructuredBuffer<uint> VolumeCount;
+
+#define TO_LINEAR_ID(id) (id.x + id.y * Resolution + id.z * Resolution * Resolution)
+
+// Output
+RWTexture3D<float4> Target;
+
+
+// Parametrize
+uint NumThreads[3] = {0, 0, 0};
+RWByteAddressBuffer Arguments;
+
+[numthreads(1,1,1)]
+void CSParameterize()
+{
+    [unroll]
+    for (uint i = 0; i < 3; i++)
+    {
+        const uint address = 4 * i;
+        const uint threads = NumThreads[i];
+        if (threads > 1)
+        {
+            Arguments.Store(address, max(ceil((float)Arguments.Load(address) / threads), 1));
+        }
+    }
+}
+
+
+[numthreads(4, 4, 4)]
+void CSClear(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id >= Resolution)) return;
+
+    uint i = TO_LINEAR_ID(id);
+    VolumeRG[i] = 0u;
+    VolumeBA[i] = 0u;
+    VolumeCount[i] = 0u;
+}
+
+[numthreads(4, 4, 4)]
+void CSClear3d(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id >= Resolution)) return;
+    Target[id] = 0.0f;
+}
+
+
+[numthreads(64, 1, 1)]
+void CSConsume(uint id : SV_DispatchThreadID)
+{
+    VoxelData data = VoxelBuffer.Consume();
+
+    DeviceMemoryBarrierWithGroupSync();
+
+    // TODO: Add data validation?
+
+    uint4 intColor = (uint4)round(data.color * COLOR_PRECISION);
+
+    const uint3 positionPS = min(data.position.xyz, Resolution - 1);
+    const uint voxelId = TO_LINEAR_ID(positionPS);
+    InterlockedAdd(VolumeRG[voxelId], intColor.r | intColor.g << 16);
+    InterlockedAdd(VolumeBA[voxelId], intColor.b | intColor.a << 16);
+    InterlockedAdd(VolumeCount[voxelId], 1);
+}
+
+
+[numthreads(4, 4, 4)]
+void CSAggregate(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id >= Resolution)) return;
+
+    uint i = TO_LINEAR_ID(id);
+    uint rg = VolumeRG[i];
+    uint ba = VolumeBA[i];
+    uint count = VolumeCount[i];
+
+    if (count > 0u)
+    {
+        float4 color = uint4(
+            rg & 0xffff,
+            rg >> 16u,
+            ba & 0xffff,
+            ba >> 16u
+        ) / COLOR_PRECISION;
+
+        Target[id] = color / count;
+    }
+    else
+    {
+        #ifdef D3D11
+        // Write only when necessary
+        if (any(Target[id])) Target[id] = 0.0;
+        #else
+        Target[id] = 0.0;
+        #endif
+    }
+}

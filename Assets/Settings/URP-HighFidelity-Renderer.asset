@@ -13,9 +13,8 @@ MonoBehaviour:
   m_Name: RadianceCascadesFeature
   m_EditorClassIdentifier: 
   m_Active: 1
-  BlitMaterial: {fileID: 2100000, guid: 206f0ae81b80148c7ab95b6f50db4cba, type: 2}
-  RadianceCascades: {fileID: 7200000, guid: 0ebfba9c25c940319f9ea30f66cd0f3b, type: 3}
-  RadianceCascades3d: {fileID: 7200000, guid: 54a62da9cffb40d991ab9aa90c091509, type: 3}
+  Resources: {fileID: 11400000, guid: 12d0b21bf1a6143f5bc8242361cc85ea, type: 2}
+  showDebugView: 1
   _renderType: 0
 --- !u!114 &11400000
 MonoBehaviour:

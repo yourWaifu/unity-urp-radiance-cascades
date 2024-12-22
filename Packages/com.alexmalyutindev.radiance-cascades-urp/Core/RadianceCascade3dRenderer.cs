@@ -20,6 +20,7 @@ namespace AlexMalyutinDev.RadianceCascades
         public void RenderCascade(
             CommandBuffer cmd,
             ref RenderingData renderingData,
+            RadianceCascadesRenderingData radianceCascadesRenderingData,
             RTHandle color,
             RTHandle depth,
             int probeSize,
@@ -38,11 +39,14 @@ namespace AlexMalyutinDev.RadianceCascades
 
             var view = renderingData.cameraData.GetViewMatrix();
             var proj = renderingData.cameraData.GetGPUProjectionMatrix();
+            // var view = renderingData.cameraData.camera.worldToCameraMatrix;
+            // var proj = renderingData.cameraData.camera.projectionMatrix;
 
-            var viewProj = proj * view;
+
+            var viewProj = view * proj;
             cmd.SetComputeMatrixParam(_compute, ShaderIds.View, view);
             cmd.SetComputeMatrixParam(_compute, ShaderIds.ViewProjection, viewProj);
-            cmd.SetComputeMatrixParam(_compute, ShaderIds.InvViewProjection, view.inverse * proj.inverse);
+            cmd.SetComputeMatrixParam(_compute, ShaderIds.InvViewProjection, viewProj.inverse);
 
             cmd.SetComputeVectorParam(
                 _compute,
@@ -52,6 +56,28 @@ namespace AlexMalyutinDev.RadianceCascades
 
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.ColorTexture, color);
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.DepthTexture, depth);
+
+            cmd.SetComputeMatrixParam(_compute, "_WorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume);
+            cmd.SetComputeMatrixParam(_compute, "_InvWorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume.inverse);
+            var volumeRT = radianceCascadesRenderingData.SceneVolume.rt;
+            var _SceneVolume_TexelSize = new Vector4(
+                1.0f / volumeRT.width,
+                1.0f / volumeRT.height,
+                volumeRT.width,
+                volumeRT.height
+            );
+            cmd.SetComputeVectorParam(
+                _compute,
+                "_SceneVolume_TexelSize",
+                _SceneVolume_TexelSize
+            );
+            cmd.SetComputeTextureParam(
+                _compute,
+                _renderKernel,
+                ShaderIds.SceneVolume,
+                radianceCascadesRenderingData.SceneVolume
+            );
+
 
             // Output
             cmd.SetComputeTextureParam(_compute, _renderKernel, ShaderIds.OutCascade, target);
