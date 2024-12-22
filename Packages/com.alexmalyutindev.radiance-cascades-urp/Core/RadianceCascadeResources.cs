@@ -8,7 +8,11 @@ namespace AlexMalyutinDev.RadianceCascades
         public ComputeShader RadianceCascades;
         public ComputeShader RadianceCascades3d;
 
+        [Space]
         public Shader Voxelizator;
         public ComputeShader VoxelizatorCS;
+
+        [Space]
+        public Material HiZDepthMaterial;
     }
 }

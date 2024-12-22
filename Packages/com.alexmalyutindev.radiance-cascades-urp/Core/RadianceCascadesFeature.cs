@@ -1,4 +1,5 @@
 using AlexMalyutinDev.RadianceCascades;
+using AlexMalyutinDev.RadianceCascades.HiZDepth;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -17,6 +18,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     private RadianceCascadesPass _pass;
     private RadianceCascades3dPass _pass3d;
     private VoxelizationPass _voxelizationPass;
+    private HiZDepthPass _hiZDepthPass;
 
     private RadianceCascadesRenderingData _radianceCascadesRenderingData;
 
@@ -37,6 +39,11 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
+
+        _hiZDepthPass = new HiZDepthPass(Resources.HiZDepthMaterial, null)
+        {
+            renderPassEvent = RenderPassEvent.AfterRenderingGbuffer
+        };
     }
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -50,6 +57,8 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
         {
             return;
         }
+        
+        renderer.EnqueuePass(_hiZDepthPass);
 
         if (_renderType == RenderType._2D)
         {

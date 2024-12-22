@@ -1,0 +1,16 @@
+#pragma kernel DownSampleDepthMax2x2
+
+Texture2D<float> _InputDepth;
+RWTexture2D<float> _TargetDepth;
+
+[numthreads(8,8,1)]
+void DownSampleDepthMax2x2(uint3 id : SV_DispatchThreadID)
+{
+    int2 upperCoord = id.xy * 2;
+    float a = _InputDepth[upperCoord];
+    float b = _InputDepth[upperCoord + int2(1, 0)];
+    float c = _InputDepth[upperCoord + int2(0, 1)];
+    float d = _InputDepth[upperCoord + int2(1, 1)];
+    
+    _TargetDepth[id.xy] = max(max(a, b), max(c, d));
+}
