@@ -4,13 +4,13 @@ using UnityEngine.Rendering.Universal;
 
 namespace AlexMalyutinDev.RadianceCascades
 {
-    public class RadianceCascade3d
+    public class RadianceCascade3dCS
     {
         private readonly ComputeShader _compute;
         private readonly int _renderKernel;
         private readonly int _mergeKernel;
 
-        public RadianceCascade3d(ComputeShader compute)
+        public RadianceCascade3dCS(ComputeShader compute)
         {
             _compute = compute;
             _renderKernel = _compute.FindKernel("RenderCascade");
@@ -39,9 +39,6 @@ namespace AlexMalyutinDev.RadianceCascades
 
             var view = renderingData.cameraData.GetViewMatrix();
             var proj = renderingData.cameraData.GetGPUProjectionMatrix();
-            // var view = renderingData.cameraData.camera.worldToCameraMatrix;
-            // var proj = renderingData.cameraData.camera.projectionMatrix;
-
 
             var viewProj = view * proj;
             cmd.SetComputeMatrixParam(_compute, ShaderIds.View, view);
@@ -60,17 +57,13 @@ namespace AlexMalyutinDev.RadianceCascades
             cmd.SetComputeMatrixParam(_compute, "_WorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume);
             cmd.SetComputeMatrixParam(_compute, "_InvWorldToSceneVolume", radianceCascadesRenderingData.WorldToVolume.inverse);
             var volumeRT = radianceCascadesRenderingData.SceneVolume.rt;
-            var _SceneVolume_TexelSize = new Vector4(
+            var sceneVolumeTexelSize = new Vector4(
                 1.0f / volumeRT.width,
                 1.0f / volumeRT.height,
                 volumeRT.width,
                 volumeRT.height
             );
-            cmd.SetComputeVectorParam(
-                _compute,
-                "_SceneVolume_TexelSize",
-                _SceneVolume_TexelSize
-            );
+            cmd.SetComputeVectorParam(_compute, "_SceneVolume_TexelSize", sceneVolumeTexelSize);
             cmd.SetComputeTextureParam(
                 _compute,
                 _renderKernel,
@@ -104,8 +97,8 @@ namespace AlexMalyutinDev.RadianceCascades
 
             cmd.SetComputeFloatParam(_compute, "_LowerCascadeLevel", lowerCascadeLevel);
 
-            cmd.SetComputeTextureParam(_compute, _mergeKernel, "_LowerCascade", lower);
-            cmd.SetComputeTextureParam(_compute, _mergeKernel, "_UpperCascade", upper);
+            cmd.SetComputeTextureParam(_compute, _mergeKernel, ShaderIds.LowerCascade, lower);
+            cmd.SetComputeTextureParam(_compute, _mergeKernel, ShaderIds.UpperCascade, upper);
 
             cmd.DispatchCompute(
                 _compute,

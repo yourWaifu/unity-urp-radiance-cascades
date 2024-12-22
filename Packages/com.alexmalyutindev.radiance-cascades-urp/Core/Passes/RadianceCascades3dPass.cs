@@ -1,20 +1,22 @@
+using System;
 using AlexMalyutinDev.RadianceCascades;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-public class RadianceCascades3dPass : ScriptableRenderPass
+public class RadianceCascades3dPass : ScriptableRenderPass, IDisposable
 {
     private const int CascadesCount = 5;
-    private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
+    private static readonly string[] Cascade3dNames = GenNames("_Cascade", CascadesCount);
+
     private readonly ProfilingSampler _profilingSampler;
 
-    private RTHandle[] _Cascades = new RTHandle[CascadesCount];
-    private static readonly string[] _cascade3dNames = GenNames("_Cascade", CascadesCount);
-
+    private readonly RadianceCascadesRenderingData _radianceCascadesRenderingData;
     private readonly Material _blitMaterial;
-    private readonly RadianceCascade3d _radianceCascade;
+    private readonly RadianceCascade3dCS _radianceCascade;
+
+    private readonly RTHandle[] _cascades = new RTHandle[CascadesCount];
 
     public RadianceCascades3dPass(
         RadianceCascadeResources resources,
@@ -22,7 +24,7 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     )
     {
         _profilingSampler = new ProfilingSampler(nameof(RadianceCascadesPass));
-        _radianceCascade = new RadianceCascade3d(resources.RadianceCascades3d);
+        _radianceCascade = new RadianceCascade3dCS(resources.RadianceCascades3d);
         _radianceCascadesRenderingData = radianceCascadesRenderingData;
         _blitMaterial = resources.BlitMaterial;
     }
@@ -41,12 +43,12 @@ public class RadianceCascades3dPass : ScriptableRenderPass
             depthBufferBits = 0,
             depthStencilFormat = GraphicsFormat.None,
         };
-        for (int i = 0; i < _Cascades.Length; i++)
+        for (int i = 0; i < _cascades.Length; i++)
         {
             RenderingUtils.ReAllocateIfNeeded(
-                ref _Cascades[i],
+                ref _cascades[i],
                 decs,
-                name: _cascade3dNames[i],
+                name: Cascade3dNames[i],
                 filterMode: FilterMode.Point,
                 wrapMode: TextureWrapMode.Clamp
             );
@@ -88,12 +90,9 @@ public class RadianceCascades3dPass : ScriptableRenderPass
     )
     {
         var sampleKey = "RenderCascades";
-
-        // TODO: Bind _radianceCascadesRenderingData.SceneVolume
-
         cmd.BeginSample(sampleKey);
         {
-            for (int level = 0; level < _Cascades.Length; level++)
+            for (int level = 0; level < _cascades.Length; level++)
             {
                 _radianceCascade.RenderCascade(
                     cmd,
@@ -103,23 +102,23 @@ public class RadianceCascades3dPass : ScriptableRenderPass
                     depthTexture,
                     2 << level,
                     level,
-                    _Cascades[level]
+                    _cascades[level]
                 );
             }
         }
         cmd.EndSample(sampleKey);
 
-        PreviewCascades(cmd, _Cascades);
+        PreviewCascades(cmd, _cascades);
 
         sampleKey = "MergeCascades";
         cmd.BeginSample(sampleKey);
         {
-            for (int level = _Cascades.Length - 1; level > 0; level--)
+            for (int level = _cascades.Length - 1; level > 0; level--)
             {
                 _radianceCascade.MergeCascades(
                     cmd,
-                    _Cascades[level - 1],
-                    _Cascades[level],
+                    _cascades[level - 1],
+                    _cascades[level],
                     level - 1
                 );
             }
@@ -129,11 +128,10 @@ public class RadianceCascades3dPass : ScriptableRenderPass
 
         sampleKey = "Combine";
         cmd.BeginSample(sampleKey);
-        Blitter.BlitTexture(cmd, _Cascades[0], new Vector4(1f / 2f, 1f / 3f, 0, 0), _blitMaterial, 1);
+        Blitter.BlitTexture(cmd, _cascades[0], new Vector4(1f / 2f, 1f / 3f, 0, 0), _blitMaterial, 1);
         cmd.EndSample(sampleKey);
 
-
-        PreviewCascades(cmd, _Cascades, 1.0f);
+        PreviewCascades(cmd, _cascades, 1.0f);
     }
 
     private void PreviewCascades(CommandBuffer cmd, RTHandle[] rtHandles, float offset = 0.0f)
@@ -156,6 +154,14 @@ public class RadianceCascades3dPass : ScriptableRenderPass
         cmd.EndSample("Preview");
     }
 
+
+    public void Dispose()
+    {
+        for (int i = 0; i < _cascades.Length; i++)
+        {
+            _cascades[i]?.Release();
+        }
+    }
 
     private static string[] GenNames(string name, int n)
     {

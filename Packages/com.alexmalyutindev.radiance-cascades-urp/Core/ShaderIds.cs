@@ -7,6 +7,9 @@ namespace AlexMalyutinDev.RadianceCascades
         public static readonly int ProbeSize = Shader.PropertyToID("_ProbeSize");
         public static readonly int CascadeLevel = Shader.PropertyToID("_CascadeLevel");
         public static readonly int CascadeBufferSize = Shader.PropertyToID("_CascadeBufferSize");
+
+        public static readonly int LowerCascade = Shader.PropertyToID("_LowerCascade");
+        public static readonly int UpperCascade = Shader.PropertyToID("_UpperCascade");
         
         public static readonly int View = Shader.PropertyToID("_View");
         public static readonly int ViewProjection = Shader.PropertyToID("_ViewProjection");

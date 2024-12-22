@@ -12,8 +12,8 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     [SerializeField]
     private RenderType _renderType;
 
-    private RadianceCascadesPass _pass;
-    private RadianceCascades3dPass _pass3d;
+    private RadianceCascadesPass _radianceCascadesPass;
+    private RadianceCascades3dPass _radianceCascadesPass3d;
     private VoxelizationPass _voxelizationPass;
     private HiZDepthPass _hiZDepthPass;
 
@@ -23,7 +23,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
     {
         _radianceCascadesRenderingData = new RadianceCascadesRenderingData();
 
-        _pass = new RadianceCascadesPass(Resources, showDebugView)
+        _radianceCascadesPass = new RadianceCascadesPass(Resources, showDebugView)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
@@ -32,7 +32,7 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
         {
             renderPassEvent = RenderPassEvent.AfterRenderingShadows,
         };
-        _pass3d = new RadianceCascades3dPass(Resources, _radianceCascadesRenderingData)
+        _radianceCascadesPass3d = new RadianceCascades3dPass(Resources, _radianceCascadesRenderingData)
         {
             renderPassEvent = RenderPassEvent.AfterRenderingDeferredLights
         };
@@ -54,17 +54,19 @@ public class RadianceCascadesFeature : ScriptableRendererFeature
 
         if (_renderType == RenderType._2D)
         {
-            renderer.EnqueuePass(_pass);
+            renderer.EnqueuePass(_radianceCascadesPass);
         }
         else if (_renderType == RenderType._3D)
         {
             renderer.EnqueuePass(_voxelizationPass);
-            renderer.EnqueuePass(_pass3d);
+            renderer.EnqueuePass(_radianceCascadesPass3d);
         }
     }
 
     protected override void Dispose(bool disposing)
     {
+        _radianceCascadesPass?.Dispose();
+        _radianceCascadesPass3d?.Dispose();
         _voxelizationPass?.Dispose();
         _hiZDepthPass?.Dispose();
     }
