@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+#if UNITY_6000_0_OR_NEWER
+using UnityEngine.Rendering.RenderGraphModule;
+#endif
 
 namespace AlexMalyutinDev.RadianceCascades
 {
@@ -21,6 +24,15 @@ namespace AlexMalyutinDev.RadianceCascades
             props.SetTexture(BlitTextureId, texture);
             cmd.DrawMesh(s_QuadMesh, Matrix4x4.identity, material, 0, pass, props);
         }
+#if UNITY_6000_0_OR_NEWER
+        public static void BlitTexture(RasterCommandBuffer cmd, TextureHandle texture, Material material, int pass)
+        {
+            Initialize();
+            var props = new MaterialPropertyBlock();
+            props.SetTexture(BlitTextureId, texture);
+            cmd.DrawMesh(s_QuadMesh, Matrix4x4.identity, material, 0, pass, props);
+        }
+#endif
 
         public static void Initialize()
         {
